@@ -1,0 +1,1154 @@
+// The Modern Man OS — data model
+//
+// Design rule: everything that contributed to a published post must remain
+// reconstructable afterward. That is why claims, sources, agent runs, QA results
+// and platform responses are all first-class rows rather than JSON blobs — the
+// brief requires full traceability from a published post back to its evidence.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===========================================================================
+// TENANCY, IDENTITY, ACCESS
+// ===========================================================================
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users          User[]
+  brands         Brand[]
+  socialAccounts SocialAccount[]
+  topics         Topic[]
+  contentPieces  ContentPiece[]
+  auditLogs      AuditLog[]
+  agentRuns      AgentRun[]
+  costEntries    CostEntry[]
+  experiments    Experiment[]
+  automation     AutomationState?
+  memories       SystemMemory[]
+
+  @@map("organizations")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+model User {
+  id             String   @id @default(cuid())
+  organizationId String
+  email          String   @unique
+  passwordHash   String
+  name           String
+  role           Role     @default(VIEWER)
+  isActive       Boolean  @default(true)
+  lastLoginAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessions     Session[]
+
+  @@index([organizationId])
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique // the raw session token never touches the database
+  ipAddress String?
+  userAgent String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+// ===========================================================================
+// BRAND
+// ===========================================================================
+
+model Brand {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  logoUrl        String?
+  watermarkUrl   String?
+
+  colors      Json // { black, offWhite, gold, darkGray, ... }
+  fonts       Json // { display, body, accent }
+  tone        String[]
+  avoidList   String[]
+  ctaStyle    String  @default("Follow @themodernman for more.")
+  visualDirection String @default("luxury magazine x business media x modern menswear editorial")
+
+  defaultSlideCount Int  @default(8)
+  aspectRatios      Json // { carousel: "4:5", reel: "9:16", story: "9:16" }
+  voicePreferences  Json?
+  visualPreferences Json?
+
+  // Percentages by category; must total 100. Adjusted by the learning engine.
+  contentMix Json
+  // Topic-scoring weights. Adjusted (within bounds) by the learning engine.
+  scoringWeights Json
+
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  socialAccounts SocialAccount[]
+  topics         Topic[]
+  contentPieces  ContentPiece[]
+
+  @@index([organizationId])
+  @@map("brands")
+}
+
+// ===========================================================================
+// SOCIAL ACCOUNTS AND CREDENTIALS
+// ===========================================================================
+
+enum Platform {
+  INSTAGRAM
+  TIKTOK
+  FACEBOOK
+  YOUTUBE
+  X
+  LINKEDIN
+  PINTEREST
+  THREADS
+}
+
+enum AccountStatus {
+  CONNECTED
+  TOKEN_EXPIRED
+  REVOKED
+  ERROR
+  DISCONNECTED
+}
+
+model SocialAccount {
+  id             String   @id @default(cuid())
+  organizationId String
+  brandId        String?
+  platform       Platform
+
+  platformAccountId String // IG user id / TikTok open_id / FB page id
+  username          String
+  displayName       String?
+  profileImageUrl   String?
+  accountType       String? // BUSINESS | CREATOR | PAGE
+
+  status        AccountStatus @default(CONNECTED)
+  statusMessage String?
+
+  // TikTok-specific: until the API client passes audit, every post is forced
+  // SELF_ONLY. Surfaced in the UI so a private post is never a surprise.
+  isAudited Boolean @default(false)
+
+  scopes            String[]
+  lastSyncAt        DateTime?
+  lastPublishAt     DateTime?
+  lastPublishError  String?
+  followerCount     Int?
+  metadata          Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  brand           Brand?           @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  token           PlatformToken?
+  publishingJobs  PublishingJob[]
+  analytics       AnalyticsRecord[]
+  snapshots       PerformanceSnapshot[]
+
+  @@unique([organizationId, platform, platformAccountId])
+  @@index([organizationId])
+  @@map("social_accounts")
+}
+
+/// Token material, encrypted at rest with AES-256-GCM. Split into its own table
+/// so the hot SocialAccount reads that drive the dashboard never load secrets.
+model PlatformToken {
+  id              String   @id @default(cuid())
+  socialAccountId String   @unique
+
+  accessTokenEnc  String
+  refreshTokenEnc String?
+  tokenType       String   @default("bearer")
+  expiresAt       DateTime?
+  refreshExpiresAt DateTime?
+  scopes          String[]
+  lastRefreshedAt DateTime?
+  refreshFailures Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("platform_tokens")
+}
+
+// ===========================================================================
+// RESEARCH: TOPICS -> SOURCES -> CLAIMS -> REPORTS
+// ===========================================================================
+
+enum TopicStatus {
+  DISCOVERED
+  SCORED
+  SELECTED
+  RESEARCHING
+  RESEARCHED
+  IN_PRODUCTION
+  USED
+  REJECTED
+  EXPIRED
+}
+
+enum ContentCategory {
+  MONEY
+  BUSINESS
+  AI
+  TECHNOLOGY
+  MINDSET
+  PSYCHOLOGY
+  SPORTS
+  LUXURY
+  LIFESTYLE
+  RELATIONSHIPS
+  NEWS
+}
+
+model Topic {
+  id             String   @id @default(cuid())
+  organizationId String
+  brandId        String?
+
+  title       String
+  summary     String
+  category    ContentCategory
+  status      TopicStatus @default(DISCOVERED)
+
+  discoverySource String   // rss | news_api | search | manual
+  discoveryUrl    String?
+  keywords        String[]
+  entities        String[] // people, companies, products named in the topic
+
+  // Scoring. Individual dimensions are kept alongside the composite so the
+  // learning engine can correlate each dimension with realized performance.
+  dimensionScores Json?
+  compositeScore  Float?
+  viralPotential  Float?
+  scoredAt        DateTime?
+
+  /// Semantic fingerprint for duplicate detection across topics.
+  contentHash String?
+  embedding   Float[]
+
+  isBreakingNews Boolean   @default(false)
+  expiresAt      DateTime? // timeliness window; breaking news decays fast
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  brand           Brand?           @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  sources         Source[]
+  claims          Claim[]
+  researchReports ResearchReport[]
+  contentIdeas    ContentIdea[]
+  contentPieces   ContentPiece[]
+  costEntries     CostEntry[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, category])
+  @@index([compositeScore])
+  @@index([contentHash])
+  @@map("topics")
+}
+
+model Source {
+  id      String @id @default(cuid())
+  topicId String
+
+  url          String
+  title        String
+  publisher    String?
+  author       String?
+  publishedAt  DateTime?
+  retrievedAt  DateTime @default(now())
+  excerpt      String?  @db.Text
+  fullText     String?  @db.Text
+  /// 0..1 assessment of outlet reliability. Feeds claim confidence.
+  credibility  Float    @default(0.5)
+
+  createdAt DateTime @default(now())
+
+  topic  Topic   @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  claims Claim[]
+
+  @@index([topicId])
+  @@map("sources")
+}
+
+enum VerificationStatus {
+  VERIFIED
+  PARTIALLY_VERIFIED
+  UNVERIFIED
+  CONTRADICTED
+}
+
+/// A single factual assertion, always tied back to the source it came from.
+/// Nothing reaches a published asset without a row here, which is what makes
+/// "only VERIFIED claims may auto-publish" enforceable rather than aspirational.
+model Claim {
+  id       String @id @default(cuid())
+  topicId  String
+  sourceId String?
+
+  text             String   @db.Text
+  claimType        String   // statistic | date | quote | event | attribution | general
+  verification     VerificationStatus @default(UNVERIFIED)
+  confidence       Float    @default(0)
+  /// Independent sources that corroborate this claim.
+  corroborationCount Int    @default(0)
+  verifierNotes    String?  @db.Text
+  verifiedAt       DateTime?
+
+  sourceUrl   String?
+  sourceDate  DateTime?
+  retrievedAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  topic  Topic   @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  source Source? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+
+  @@index([topicId])
+  @@index([verification])
+  @@map("claims")
+}
+
+model ResearchReport {
+  id      String @id @default(cuid())
+  topicId String
+
+  summary       String @db.Text
+  keyFindings   String[]
+  angles        String[]
+  statistics    Json?
+  people        String[]
+  companies     String[]
+  quotes        Json?
+  contradictions String[]
+
+  sourceCount   Int @default(0)
+  claimCount    Int @default(0)
+  verifiedCount Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@index([topicId])
+  @@map("research_reports")
+}
+
+// ===========================================================================
+// CONTENT
+// ===========================================================================
+
+enum ContentFormat {
+  CAROUSEL
+  REEL
+  SINGLE_IMAGE
+  STORY
+  SERIES
+}
+
+/// The lifecycle from the brief. Transitions are validated in code
+/// (packages/contracts/src/lifecycle.ts); illegal moves throw.
+enum ContentStatus {
+  DISCOVERED
+  RESEARCHING
+  RESEARCHED
+  WRITING
+  DESIGNING
+  QA
+  APPROVED
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  ANALYZING
+  LEARNED
+  FLAGGED
+  FAILED
+  ARCHIVED
+}
+
+model ContentIdea {
+  id      String @id @default(cuid())
+  topicId String
+
+  format      ContentFormat
+  angle       String
+  hook        String
+  rationale   String?  @db.Text
+  targetPlatforms Platform[]
+  score       Float?
+  selected    Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  topic         Topic          @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  contentPieces ContentPiece[]
+
+  @@index([topicId])
+  @@map("content_ideas")
+}
+
+model ContentPiece {
+  id             String   @id @default(cuid())
+  organizationId String
+  brandId        String?
+  topicId        String?
+  contentIdeaId  String?
+
+  format   ContentFormat
+  status   ContentStatus @default(DISCOVERED)
+  category ContentCategory
+
+  title    String
+  hook     String
+  /// Hook family (e.g. "contrarian", "number-lead") — the learning engine
+  /// aggregates by archetype, since individual hooks never repeat.
+  hookArchetype String?
+
+  scriptBody   String? @db.Text
+  cta          String?
+  designNotes  Json?
+
+  /// Ranking aid only. Explicitly not a prediction of virality.
+  viralPotentialScore Float?
+  qualityScore        Float?
+
+  /// Set when QA or the fact gate pulls the piece out of the automated path.
+  flagReason  String?
+  flaggedAt   DateTime?
+  approvedAt  DateTime?
+  approvedBy  String?
+
+  /// Semantic fingerprint used to block near-identical reposts.
+  contentHash String?
+  embedding   Float[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  brand         Brand?        @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  topic         Topic?        @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  contentIdea   ContentIdea?  @relation(fields: [contentIdeaId], references: [id], onDelete: SetNull)
+
+  carousel       CarouselPost?
+  reel           Reel?
+  captions       Caption[]
+  mediaAssets    MediaAsset[]
+  publishingJobs PublishingJob[]
+  qaResults      QaResult[]
+  scores         ContentScore[]
+  costEntries    CostEntry[]
+  statusHistory  ContentStatusChange[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, format])
+  @@index([contentHash])
+  @@map("content_pieces")
+}
+
+/// Append-only lifecycle audit for a piece of content.
+model ContentStatusChange {
+  id             String        @id @default(cuid())
+  contentPieceId String
+  fromStatus     ContentStatus?
+  toStatus       ContentStatus
+  reason         String?
+  actor          String        @default("system")
+  createdAt      DateTime      @default(now())
+
+  contentPiece ContentPiece @relation(fields: [contentPieceId], references: [id], onDelete: Cascade)
+
+  @@index([contentPieceId])
+  @@map("content_status_changes")
+}
+
+model CarouselPost {
+  id             String @id @default(cuid())
+  contentPieceId String @unique
+
+  slideCount  Int
+  aspectRatio String @default("4:5")
+  coverSlideIndex Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contentPiece ContentPiece    @relation(fields: [contentPieceId], references: [id], onDelete: Cascade)
+  slides       CarouselSlide[]
+
+  @@map("carousel_posts")
+}
+
+model CarouselSlide {
+  id             String @id @default(cuid())
+  carouselPostId String
+
+  position  Int
+  headline  String?
+  body      String? @db.Text
+  slideRole String  // HOOK | CONTEXT | POINT | TAKEAWAY | CTA
+
+  /// Full design specification consumed by the renderer: background, image,
+  /// image_position, font, font_size, spacing, alignment, accent,
+  /// logo_position, page_number, visual_hierarchy.
+  design Json
+
+  renderedImageUrl String?
+  mediaAssetId     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  carouselPost CarouselPost @relation(fields: [carouselPostId], references: [id], onDelete: Cascade)
+  mediaAsset   MediaAsset?  @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
+
+  @@unique([carouselPostId, position])
+  @@index([carouselPostId])
+  @@map("carousel_slides")
+}
+
+model Reel {
+  id             String @id @default(cuid())
+  contentPieceId String @unique
+
+  durationSec   Float?
+  aspectRatio   String @default("9:16")
+  width         Int    @default(1080)
+  height        Int    @default(1920)
+
+  /// Timed beats: HOOK / SETUP / BODY / PATTERN_INTERRUPT / PAYOFF / CTA
+  scriptBeats   Json
+  voiceoverText String? @db.Text
+
+  renderedVideoUrl String?
+  thumbnailUrl     String?
+  renderStatus     String  @default("PENDING") // PENDING | RENDERING | COMPLETE | FAILED
+  renderError      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contentPiece ContentPiece @relation(fields: [contentPieceId], references: [id], onDelete: Cascade)
+  audioAssets  AudioAsset[]
+
+  @@map("reels")
+}
+
+// ===========================================================================
+// MEDIA AND RIGHTS
+// ===========================================================================
+
+enum AssetSource {
+  GENERATED
+  STOCK_LICENSED
+  PUBLIC_DOMAIN
+  ORIGINAL
+  BRAND_ASSET
+}
+
+enum RightsRisk {
+  LOW
+  MEDIUM
+  HIGH
+  UNKNOWN
+}
+
+/// Every asset carries its provenance. The rights agent reads these fields;
+/// HIGH risk never auto-publishes.
+model MediaAsset {
+  id             String @id @default(cuid())
+  contentPieceId String?
+
+  kind        String // image | video | broll
+  storageKey  String
+  publicUrl   String // must be publicly fetchable: Meta pulls media from a URL
+  mimeType    String
+  width       Int?
+  height      Int?
+  durationSec Float?
+  fileSizeBytes Int?
+
+  assetSource         AssetSource
+  sourceUrl           String?
+  creator             String?
+  license             String?
+  licenseUrl          String?
+  attributionRequired Boolean @default(false)
+  attributionText     String?
+  rightsRisk          RightsRisk @default(UNKNOWN)
+  rightsNotes         String?
+
+  generationPrompt String? @db.Text
+  generationModel  String?
+
+  contentHash String?
+  createdAt   DateTime @default(now())
+
+  contentPiece ContentPiece?   @relation(fields: [contentPieceId], references: [id], onDelete: SetNull)
+  slides       CarouselSlide[]
+
+  @@index([contentPieceId])
+  @@index([contentHash])
+  @@map("media_assets")
+}
+
+model AudioAsset {
+  id     String @id @default(cuid())
+  reelId String?
+
+  kind        String // voiceover | music | sfx
+  storageKey  String
+  publicUrl   String
+  mimeType    String
+  durationSec Float?
+
+  assetSource AssetSource
+  license     String?
+  rightsRisk  RightsRisk @default(UNKNOWN)
+
+  voiceProvider String?
+  voiceId       String?
+  transcript    String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  reel Reel? @relation(fields: [reelId], references: [id], onDelete: SetNull)
+
+  @@index([reelId])
+  @@map("audio_assets")
+}
+
+// ===========================================================================
+// CAPTIONS AND HASHTAGS — per platform, because limits genuinely differ
+// ===========================================================================
+
+model Caption {
+  id             String @id @default(cuid())
+  contentPieceId String
+  platform       Platform
+
+  text           String   @db.Text
+  hashtags       String[]
+  characterCount Int
+  /// False when the text exceeds the platform's documented caption limit.
+  withinLimit    Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contentPiece ContentPiece @relation(fields: [contentPieceId], references: [id], onDelete: Cascade)
+
+  @@unique([contentPieceId, platform])
+  @@map("captions")
+}
+
+model Hashtag {
+  id       String @id @default(cuid())
+  tag      String @unique
+  category ContentCategory?
+  useCount Int    @default(0)
+  lastUsedAt DateTime?
+  /// Rolling average engagement of posts carrying this tag.
+  avgEngagement Float?
+  isBanned Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("hashtags")
+}
+
+// ===========================================================================
+// QUALITY CONTROL
+// ===========================================================================
+
+enum QaGate {
+  BRAND
+  PLATFORM
+  SAFETY
+  RIGHTS
+  FACT
+  DUPLICATE
+}
+
+enum QaVerdict {
+  PASS
+  WARN
+  FAIL
+}
+
+model QaResult {
+  id             String @id @default(cuid())
+  contentPieceId String
+
+  gate     QaGate
+  verdict  QaVerdict
+  score    Float?
+  findings Json     // [{ severity, message, field, suggestion }]
+  platform Platform?
+
+  createdAt DateTime @default(now())
+
+  contentPiece ContentPiece @relation(fields: [contentPieceId], references: [id], onDelete: Cascade)
+
+  @@index([contentPieceId])
+  @@map("qa_results")
+}
+
+model ContentScore {
+  id             String @id @default(cuid())
+  contentPieceId String
+
+  scoreType String // hook | visual | virality | quality | brand_fit
+  value     Float
+  breakdown Json?
+  scorerVersion String @default("v1")
+
+  createdAt DateTime @default(now())
+
+  contentPiece ContentPiece @relation(fields: [contentPieceId], references: [id], onDelete: Cascade)
+
+  @@index([contentPieceId, scoreType])
+  @@map("content_scores")
+}
+
+// ===========================================================================
+// PUBLISHING
+// ===========================================================================
+
+enum PublishingJobStatus {
+  QUEUED
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  CANCELLED
+  BLOCKED
+}
+
+/// One job per (content piece, target account). Postgres is the source of truth
+/// for scheduled time; Redis only holds the timer. A Redis loss therefore costs
+/// timing precision, never the post itself — the reconciler re-arms from here.
+model PublishingJob {
+  id             String @id @default(cuid())
+  contentPieceId String
+  socialAccountId String
+
+  platform    Platform
+  status      PublishingJobStatus @default(QUEUED)
+  scheduledAt DateTime
+  publishedAt DateTime?
+
+  /// DELEGATED = the platform schedules it (Facebook).
+  /// SELF_TIMED = we hold it and fire at the right moment (Instagram, TikTok).
+  scheduleStrategy String @default("SELF_TIMED")
+
+  platformPostId  String?
+  platformUrl     String?
+  /// Instagram/TikTok container id between init and publish.
+  platformContainerId String?
+
+  attemptCount Int      @default(0)
+  lastError    String?  @db.Text
+  lastErrorCode String?
+  blockedReason String?
+
+  idempotencyKey String @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contentPiece  ContentPiece        @relation(fields: [contentPieceId], references: [id], onDelete: Cascade)
+  socialAccount SocialAccount       @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  attempts      PublishingAttempt[]
+  analytics     AnalyticsRecord[]
+
+  @@index([status, scheduledAt])
+  @@index([contentPieceId])
+  @@index([socialAccountId])
+  @@map("publishing_jobs")
+}
+
+/// Every attempt, including failures, with the raw platform response. This is
+/// what makes a failed publish debuggable weeks later.
+model PublishingAttempt {
+  id              String @id @default(cuid())
+  publishingJobId String
+
+  attemptNumber Int
+  step          String // create_container | poll_container | publish | upload | finalize
+  success       Boolean
+  errorCode     String?
+  errorMessage  String? @db.Text
+  httpStatus    Int?
+  requestSummary Json?
+  responseBody  Json?
+  durationMs    Int?
+
+  createdAt DateTime @default(now())
+
+  publishingJob PublishingJob @relation(fields: [publishingJobId], references: [id], onDelete: Cascade)
+
+  @@index([publishingJobId])
+  @@map("publishing_attempts")
+}
+
+// ===========================================================================
+// ANALYTICS — normalized across platforms
+// ===========================================================================
+
+/// Metrics are nullable on purpose. Instagram has deprecated `impressions`,
+/// `plays`, and others: storing 0 for a metric the API refuses to return would
+/// poison the learning engine, so absent stays absent.
+model AnalyticsRecord {
+  id              String @id @default(cuid())
+  socialAccountId String
+  publishingJobId String?
+
+  platform      Platform
+  platformPostId String
+  collectedAt   DateTime @default(now())
+
+  views            Int?
+  reach            Int?
+  impressions      Int? // deprecated on Instagram; null there
+  likes            Int?
+  comments         Int?
+  shares           Int?
+  saves            Int?
+  watchTimeSec     Float?
+  avgWatchTimeSec  Float?
+  retentionRate    Float?
+  profileVisits    Int?
+  followsGained    Int?
+  clicks           Int?
+  engagementRate   Float?
+
+  /// Metrics this platform does not expose, so the UI can say
+  /// "not available from this API" rather than implying zero.
+  unavailableMetrics String[]
+
+  raw Json?
+
+  socialAccount SocialAccount  @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  publishingJob PublishingJob? @relation(fields: [publishingJobId], references: [id], onDelete: SetNull)
+
+  @@index([socialAccountId, collectedAt])
+  @@index([platformPostId])
+  @@map("analytics_records")
+}
+
+model PerformanceSnapshot {
+  id              String @id @default(cuid())
+  socialAccountId String
+
+  capturedAt   DateTime @default(now())
+  followerCount Int?
+  reach        Int?
+  views        Int?
+  engagementRate Float?
+  postsPublished Int      @default(0)
+
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@index([socialAccountId, capturedAt])
+  @@map("performance_snapshots")
+}
+
+// ===========================================================================
+// LEARNING AND EXPERIMENTATION
+// ===========================================================================
+
+/// Learned aggregates. `sampleSize` exists so the engine can refuse to act on
+/// three lucky posts — a floor is enforced before any weight moves.
+model LearningInsight {
+  id             String @id @default(cuid())
+  organizationId String
+
+  dimension  String // category | format | hook_archetype | slide_count | reel_length | posting_hour | cta
+  key        String
+  sampleSize Int
+  avgEngagement Float
+  avgReach      Float?
+  avgSaves      Float?
+  avgWatchTime  Float?
+  /// Performance relative to the org's overall mean. >1 is above average.
+  liftVsBaseline Float
+  confidence     Float
+
+  windowStart DateTime
+  windowEnd   DateTime
+  createdAt   DateTime @default(now())
+
+  @@unique([organizationId, dimension, key, windowEnd])
+  @@index([organizationId, dimension])
+  @@map("learning_insights")
+}
+
+enum ExperimentStatus {
+  DRAFT
+  RUNNING
+  COMPLETE
+  ABANDONED
+}
+
+model Experiment {
+  id             String @id @default(cuid())
+  organizationId String
+
+  name       String
+  hypothesis String   @db.Text
+  /// Exactly one variable per experiment — the engine refuses to start one
+  /// that changes more, because the result would be uninterpretable.
+  variable   String   // hook | cover | caption | cta | visual_style | posting_time | length
+  variants   Json     // [{ key, description }]
+  status     ExperimentStatus @default(DRAFT)
+
+  minSampleSize Int @default(10)
+  results       Json?
+  winner        String?
+  conclusion    String? @db.Text
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@map("experiments")
+}
+
+/// Persistent memory: what has worked, what has not, what the audience ignored.
+/// Prevents the system from re-running content the audience has already skipped.
+model SystemMemory {
+  id             String @id @default(cuid())
+  organizationId String
+
+  memoryType String // successful_hook | failed_hook | strong_topic | weak_topic |
+                    // visual_style | audience_pattern | posting_pattern | fatigue
+  key         String
+  value       Json
+  weight      Float  @default(1)
+  observations Int   @default(1)
+  lastObservedAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, memoryType, key])
+  @@index([organizationId, memoryType])
+  @@map("system_memories")
+}
+
+// ===========================================================================
+// AGENTS, PROMPTS, COST, AUTOMATION, AUDIT
+// ===========================================================================
+
+/// Prompts are versioned rows, not string literals in code, so a prompt change
+/// is traceable to the performance shift that followed it.
+model Prompt {
+  id      String @id @default(cuid())
+  key     String
+  version Int    @default(1)
+
+  systemPrompt String  @db.Text
+  userTemplate String  @db.Text
+  model        String?
+  temperature  Float   @default(0.7)
+  maxTokens    Int     @default(4000)
+  isActive     Boolean @default(true)
+  notes        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([key, version])
+  @@index([key, isActive])
+  @@map("prompts")
+}
+
+enum AgentRunStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+model AgentRun {
+  id             String @id @default(cuid())
+  organizationId String
+
+  agentName String
+  status    AgentRunStatus @default(RUNNING)
+  trigger   String // schedule | manual | pipeline | webhook
+
+  inputSummary  Json?
+  outputSummary Json?
+  itemsProcessed Int  @default(0)
+  itemsProduced  Int  @default(0)
+
+  model        String?
+  inputTokens  Int?
+  outputTokens Int?
+  costUsd      Float?
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  durationMs Int?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  errors       AgentError[]
+
+  @@index([organizationId, agentName, startedAt])
+  @@index([status])
+  @@map("agent_runs")
+}
+
+model AgentError {
+  id         String @id @default(cuid())
+  agentRunId String
+
+  errorCode  String
+  message    String  @db.Text
+  stack      String? @db.Text
+  context    Json?
+  retryable  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  agentRun AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+
+  @@index([agentRunId])
+  @@map("agent_errors")
+}
+
+/// Cost is metered per call and attributed to a topic and content piece, so
+/// "what did this post cost to make" is answerable.
+model CostEntry {
+  id             String @id @default(cuid())
+  organizationId String
+  topicId        String?
+  contentPieceId String?
+
+  service   String // llm | image | video | voice | search | storage | platform
+  provider  String
+  model     String?
+  operation String
+
+  inputTokens  Int?
+  outputTokens Int?
+  units        Float? // images, seconds of audio, MB
+  costUsd      Float
+
+  createdAt DateTime @default(now())
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  topic        Topic?        @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  contentPiece ContentPiece? @relation(fields: [contentPieceId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([contentPieceId])
+  @@map("cost_entries")
+}
+
+/// The automation control center's state, plus the kill switch. Kept as a
+/// single row per org and checked by every worker before it does anything.
+model AutomationState {
+  id             String @id @default(cuid())
+  organizationId String @unique
+
+  autonomousMode Boolean @default(false)
+  /// Master kill switch. Checked at job start AND immediately before publish.
+  killSwitch     Boolean @default(false)
+  publishingPaused Boolean @default(false)
+
+  /// Per-agent enable flags: { trendHunter: true, reelProducer: false, ... }
+  agentFlags Json
+
+  minQueueHours    Int @default(24)
+  targetQueueHours Int @default(72)
+  maxQueueHours    Int @default(168)
+  maxPostsPerDay   Int @default(8)
+
+  lastTrendScanAt   DateTime?
+  lastGenerationAt  DateTime?
+  lastAnalyticsAt   DateTime?
+  lastLearningAt    DateTime?
+
+  pausedBy  String?
+  pausedAt  DateTime?
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("automation_states")
+}
+
+/// Immutable audit trail for every privileged action.
+model AuditLog {
+  id             String @id @default(cuid())
+  organizationId String
+
+  actorType String // user | system | agent
+  actorId   String?
+  action    String // connect_account | publish | kill_switch | role_change | ...
+  subjectType String?
+  subjectId   String?
+  diff        Json?
+  ipAddress   String?
+  userAgent   String?
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([action])
+  @@map("audit_logs")
+}

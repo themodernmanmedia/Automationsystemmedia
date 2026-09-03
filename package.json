@@ -1,0 +1,39 @@
+{
+  "name": "modern-man-os",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Modern Man OS — autonomous AI media operating system",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "build": "pnpm -r --filter='./packages/*' build && pnpm -r --filter='./apps/*' build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier --write .",
+    "db:generate": "pnpm --filter @mmos/db generate",
+    "db:migrate": "pnpm --filter @mmos/db migrate",
+    "db:push": "pnpm --filter @mmos/db push",
+    "db:seed": "pnpm --filter @mmos/db seed",
+    "db:studio": "pnpm --filter @mmos/db studio",
+    "dev:api": "pnpm --filter @mmos/api dev",
+    "dev:worker": "pnpm --filter @mmos/worker dev",
+    "dev:web": "pnpm --filter @mmos/web dev"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "eslint": "^9.17.0",
+    "nock": "^14.0.17",
+    "playwright": "^1.62.1",
+    "prettier": "^3.4.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

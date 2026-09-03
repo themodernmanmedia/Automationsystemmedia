@@ -1,0 +1,12 @@
+export * from './types.js';
+export * from './capabilities.js';
+export * from './validation.js';
+export * from './http.js';
+export * from './registry.js';
+export { InstagramAdapter } from './instagram/adapter.js';
+export type { InstagramAdapterConfig } from './instagram/adapter.js';
+export * from './instagram/metrics.js';
+export { TikTokAdapter } from './tiktok/adapter.js';
+export type { TikTokAdapterConfig, CreatorInfo } from './tiktok/adapter.js';
+export { FacebookAdapter } from './facebook/adapter.js';
+export type { FacebookAdapterConfig } from './facebook/adapter.js';
