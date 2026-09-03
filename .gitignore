@@ -15,3 +15,5 @@ tmp/
 .turbo/
 storage/
 renders/
+next-env.d.ts
+packages/db/.env

@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+}
+
+body {
+  background: #080808;
+  color: #F4F1E8;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* A restrained scrollbar — the dashboard is dense, and default chrome is loud. */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #0E0E0E; }
+::-webkit-scrollbar-thumb { background: #262626; border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: #333; }
+
+@layer components {
+  .card {
+    @apply rounded-lg border border-ink-border bg-ink-soft;
+  }
+  .card-pad { @apply p-5; }
+
+  .label {
+    @apply text-[11px] font-medium uppercase tracking-[0.14em] text-bone-dim;
+  }
+
+  .stat { @apply font-display text-4xl tracking-tightest text-bone; }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm
+           font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-primary { @apply btn bg-gold text-ink hover:bg-gold-soft; }
+  .btn-ghost { @apply btn border border-ink-border text-bone-muted hover:border-bone-dim hover:text-bone; }
+  .btn-danger { @apply btn border border-state-error/50 text-state-error hover:bg-state-error/10; }
+
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1
+           text-[11px] font-medium uppercase tracking-wider;
+  }
+}
