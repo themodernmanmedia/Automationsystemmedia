@@ -107,7 +107,7 @@ export class AiOrchestrator {
 
   async completeStructured<T>(
     request: LlmRequest,
-    schema: z.ZodType<T>,
+    schema: z.ZodType<T, z.ZodTypeDef, unknown>,
     schemaName: string,
     attribution: CallAttribution,
   ): Promise<T> {

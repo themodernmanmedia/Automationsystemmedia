@@ -1,0 +1,17 @@
+{
+  "name": "@mmos/agents",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc -p tsconfig.json --noEmit" },
+  "dependencies": {
+    "@mmos/ai": "workspace:*",
+    "@mmos/contracts": "workspace:*",
+    "@mmos/core": "workspace:*",
+    "@mmos/platforms": "workspace:*",
+    "zod": "^3.24.1"
+  }
+}

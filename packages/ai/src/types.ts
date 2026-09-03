@@ -44,7 +44,7 @@ export interface LlmProvider {
    * validate the parsed result — a schema that is only advisory is worthless
    * for a pipeline that runs unattended.
    */
-  completeStructured<T>(request: LlmRequest, schema: z.ZodType<T>, schemaName: string): Promise<{
+  completeStructured<T>(request: LlmRequest, schema: z.ZodType<T, z.ZodTypeDef, unknown>, schemaName: string): Promise<{
     data: T;
     usage: LlmUsage;
     model: string;

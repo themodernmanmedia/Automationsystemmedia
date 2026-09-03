@@ -97,7 +97,7 @@ export class AnthropicProvider implements LlmProvider {
 
   async completeStructured<T>(
     request: LlmRequest,
-    schema: z.ZodType<T>,
+    schema: z.ZodType<T, z.ZodTypeDef, unknown>,
     schemaName: string,
   ): Promise<{ data: T; usage: LlmUsage; model: string }> {
     const system = [

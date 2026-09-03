@@ -36,6 +36,24 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)
 
+  packages/agents:
+    dependencies:
+      '@mmos/ai':
+        specifier: workspace:*
+        version: link:../ai
+      '@mmos/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@mmos/core':
+        specifier: workspace:*
+        version: link:../core
+      '@mmos/platforms':
+        specifier: workspace:*
+        version: link:../platforms
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+
   packages/ai:
     dependencies:
       '@mmos/core':
