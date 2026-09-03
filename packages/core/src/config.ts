@@ -51,7 +51,7 @@ const num = (fallback: number) =>
 
 export const configSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
-  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
+  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']).default('info'),
   API_PORT: num(4000),
   API_BASE_URL: z.string().url().default('http://localhost:4000'),
   WEB_BASE_URL: z.string().url().default('http://localhost:3000'),
