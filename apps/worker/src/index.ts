@@ -14,6 +14,9 @@ import { AnalyticsService, AutomationService, DbCostSink, PublishingService, ass
 import { QUEUE_NAMES, QueueRegistry } from './queues.js';
 import { createPublishingWorker, reconcileScheduledJobs, refreshExpiringTokens } from './jobs/publishing.js';
 import { runResearch, runTopicScoring, runTrendScan, type PipelineDeps } from './jobs/pipeline.js';
+import { generateFromTopic } from './jobs/generation.js';
+import { S3StorageProvider, type StorageProvider } from '@mmos/ai';
+import { distributePostTimes } from '@mmos/engine';
 
 const config = getConfig();
 const logger = createLogger({
@@ -40,6 +43,22 @@ try {
   searchProviders = createSearchProviders(config);
 } catch (err) {
   logger.warn({ err }, 'no research provider configured; trend discovery is disabled');
+}
+
+// Storage is a hard requirement for Instagram, which fetches media from a
+// public URL. Without it, slides are designed but cannot be published.
+let storage: StorageProvider | null = null;
+try {
+  storage = new S3StorageProvider({
+    ...(config.S3_ENDPOINT ? { endpoint: config.S3_ENDPOINT } : {}),
+    region: config.S3_REGION,
+    ...(config.S3_BUCKET ? { bucket: config.S3_BUCKET } : {}),
+    ...(config.S3_ACCESS_KEY_ID ? { accessKeyId: config.S3_ACCESS_KEY_ID } : {}),
+    ...(config.S3_SECRET_ACCESS_KEY ? { secretAccessKey: config.S3_SECRET_ACCESS_KEY } : {}),
+    ...(config.S3_PUBLIC_BASE_URL ? { publicBaseUrl: config.S3_PUBLIC_BASE_URL } : {}),
+  });
+} catch (err) {
+  logger.warn({ err }, 'object storage is not configured; rendered media cannot be published');
 }
 
 function pipelineDeps(organizationId: string): PipelineDeps {
@@ -123,12 +142,15 @@ async function autonomousTick(organizationId: string): Promise<void> {
     log.error({ err }, 'topic scoring failed');
   }
 
-  // Research is the expensive stage, so it runs only when content is needed.
+  // Research and generation are the expensive stages, so they run only when
+  // the queue is actually short rather than to a fixed production quota.
   if (health.shouldGenerate) {
+    const wanted = Math.min(3, Math.max(1, health.postsNeeded));
+
     const selected = await prisma.topic.findMany({
       where: { organizationId, status: 'SELECTED' },
       orderBy: { compositeScore: 'desc' },
-      take: Math.min(3, Math.max(1, health.postsNeeded)),
+      take: wanted,
     });
 
     for (const topic of selected) {
@@ -138,6 +160,44 @@ async function autonomousTick(organizationId: string): Promise<void> {
       } catch (err) {
         log.error({ err, topicId: topic.id }, 'research failed');
         await prisma.topic.update({ where: { id: topic.id }, data: { status: 'REJECTED' } }).catch(() => {});
+      }
+    }
+
+    // Generate from topics whose research survived fact checking.
+    const researched = await prisma.topic.findMany({
+      where: { organizationId, status: 'RESEARCHED' },
+      orderBy: { compositeScore: 'desc' },
+      take: wanted,
+    });
+
+    const accounts = await prisma.socialAccount.findMany({
+      where: { organizationId, status: 'CONNECTED' },
+      select: { id: true },
+    });
+
+    for (const topic of researched) {
+      try {
+        const result = await generateFromTopic(
+          { organizationId, orchestrator: deps.orchestrator, storage, automation, logger,
+            chromiumPath: process.env['CHROMIUM_PATH'] ?? undefined },
+          topic.id,
+        );
+        log.info(result, 'content generated');
+
+        // Only approved content is scheduled. Flagged pieces wait for a human
+        // in the exception queue rather than going out unattended.
+        if (result.status === 'APPROVED' && accounts.length > 0) {
+          const [slot] = distributePostTimes(1, new Date(Date.now() + 3_600_000));
+          await publishing.schedule({
+            organizationId,
+            contentPieceId: result.contentPieceId,
+            socialAccountIds: accounts.map((a) => a.id),
+            ...(slot ? { scheduledAt: slot } : {}),
+          });
+          log.info({ contentPieceId: result.contentPieceId, scheduledAt: slot }, 'content scheduled');
+        }
+      } catch (err) {
+        log.error({ err, topicId: topic.id }, 'generation failed');
       }
     }
   }

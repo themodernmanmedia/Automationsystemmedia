@@ -139,6 +139,9 @@ importers:
       '@mmos/engine':
         specifier: workspace:*
         version: link:../../packages/engine
+      '@mmos/media':
+        specifier: workspace:*
+        version: link:../../packages/media
       '@mmos/platforms':
         specifier: workspace:*
         version: link:../../packages/platforms

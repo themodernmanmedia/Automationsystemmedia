@@ -45,10 +45,27 @@ packages/
   core/       Config, typed errors, crypto, logging, retry, rate limiting
   db/         Prisma schema and the tenant-scoped data layer
   platforms/  PlatformAdapter interface, capability registry, platform adapters
-  ai/         Provider-agnostic LLM / image / voice / search interfaces
-  agents/     The research, content, media, and QA agents
+  ai/         Provider-agnostic LLM / image / voice / search / storage interfaces
+  agents/     The research, content, and QA agents
+  media/      Carousel slide renderer and the FFmpeg reel compositor
+  engine/     Publishing, scheduling strategy, analytics, cost, kill switch
   contracts/  Zod schemas and the content lifecycle state machine
 ```
+
+## What runs unattended
+
+```
+trend scan → topic scoring → research → fact check
+    → strategy → hook → write → design → render
+        → safety · brand · platform · rights · duplicate gates
+            → APPROVED → scheduled → published → analytics → learning
+                    ↘ FLAGGED (exception queue, waits for a human)
+```
+
+Every gate is enforced in code, not asked for in a prompt. In autonomous mode
+only claims that survived fact-checking can reach a published asset, and
+anything the system is not confident about leaves the automated path instead of
+shipping.
 
 ## Quick start
 
@@ -79,3 +96,8 @@ pnpm test
 Every platform API is mocked with `nock`. The test setup blocks outbound network
 access and fails the suite if a test attempts to contact a real platform host —
 no test ever touches a production social account.
+
+The media tests produce real files and inspect them: slides are verified as
+genuine JPEGs at Instagram's 1080×1350, and composed videos are probed with
+`ffprobe` to confirm H.264, 1080×1920, `yuv420p`, and an AAC audio stream.
+They need FFmpeg with `libx264` and `aac`.
