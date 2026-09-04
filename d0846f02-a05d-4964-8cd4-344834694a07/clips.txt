@@ -1,0 +1,3 @@
+file '/home/user/Automationsystemmedia/d0846f02-a05d-4964-8cd4-344834694a07/clip-0.mp4'
+file '/home/user/Automationsystemmedia/d0846f02-a05d-4964-8cd4-344834694a07/clip-1.mp4'
+file '/home/user/Automationsystemmedia/d0846f02-a05d-4964-8cd4-344834694a07/clip-2.mp4'

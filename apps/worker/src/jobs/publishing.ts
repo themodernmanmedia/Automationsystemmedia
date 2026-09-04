@@ -12,7 +12,7 @@ import type { Redis } from 'ioredis';
 import { type Logger } from '@mmos/core';
 import { prisma } from '@mmos/db';
 import type { PublishingService } from '@mmos/engine';
-import { PUBLISH_JOB_OPTIONS, QUEUE_NAMES, type QueueRegistry } from '../queues.js';
+import { PUBLISH_JOB_OPTIONS, QUEUE_NAMES, type QueueRegistry } from '@mmos/engine';
 
 export interface PublishJobData {
   publishingJobId: string;
@@ -86,7 +86,9 @@ export async function reconcileScheduledJobs(
       {
         ...PUBLISH_JOB_OPTIONS,
         // The deterministic id is what makes re-arming safe to repeat.
-        jobId: `publish:${job.id}`,
+        // Deterministic id keeps re-arming idempotent. No ':' — BullMQ
+        // reserves it as its Redis key delimiter and rejects it outright.
+        jobId: `publish-${job.id}`,
         delay,
       },
     );

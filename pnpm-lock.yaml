@@ -244,6 +244,12 @@ importers:
       '@mmos/platforms':
         specifier: workspace:*
         version: link:../platforms
+      bullmq:
+        specifier: ^5.34.5
+        version: 5.81.4
+      ioredis:
+        specifier: ^5.4.2
+        version: 5.11.1
       zod:
         specifier: ^3.24.1
         version: 3.25.76

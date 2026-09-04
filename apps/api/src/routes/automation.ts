@@ -9,7 +9,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '@mmos/db';
-import { assessQueueHealth } from '@mmos/engine';
+import { QUEUE_NAMES, assessQueueHealth } from '@mmos/engine';
 import { capabilityMatrix, PLANNED_PLATFORMS, SUPPORTED_PLATFORMS } from '@mmos/platforms';
 import type { AppContext } from '../context.js';
 import { orgScope, requireAuth } from '../auth.js';
@@ -130,6 +130,147 @@ export async function automationRoutes(app: FastifyInstance, ctx: AppContext): P
 
     const updated = await prisma.automationState.update({ where: { organizationId }, data: body });
     return { state: updated };
+  });
+
+  /* --------------------------- manual triggers -------------------------- */
+
+  /**
+   * Runs a pipeline stage immediately.
+   *
+   * This exists so an operator can see what the system actually produces
+   * before trusting it to run unattended. Without it, the only way to generate
+   * anything would be to enable autonomous mode and hope.
+   *
+   * The job is enqueued rather than run inline: it is the same code path the
+   * scheduler uses, so a manual run cannot behave differently from a scheduled
+   * one, and a long generation does not block the request.
+   */
+  app.post('/automation/run/:job', { preHandler: requireAuth('EDITOR') }, async (request, reply) => {
+    const { organizationId } = orgScope(request);
+    const { job } = z
+      .object({ job: z.enum(['tick', 'render', 'analytics', 'snapshot', 'reconcile']) })
+      .parse(request.params);
+
+    if (!ctx.queues) {
+      return reply.code(503).send({
+        error: 'QueueUnavailable',
+        code: 'API_ERROR',
+        message: 'Cannot reach the job queue. Check that Redis is running and REDIS_URL is correct.',
+      });
+    }
+
+    // The kill switch outranks a manual trigger. Someone stopping the system
+    // must not be overridden by another operator pressing Run now.
+    const state = await ctx.automation.get(organizationId);
+    if (state.killSwitch) {
+      return reply.code(409).send({
+        error: 'KillSwitchEngaged',
+        code: 'FORBIDDEN',
+        message: 'The kill switch is engaged. Release it before running jobs.',
+      });
+    }
+
+    if (job === 'tick' && !ctx.integrations.llm) {
+      return reply.code(422).send({
+        error: 'NotConfigured',
+        code: 'PROVIDER_NOT_CONFIGURED',
+        message: ctx.integrationErrors['llm'] ?? 'No LLM provider is configured.',
+      });
+    }
+
+    const queued = await ctx.queues.get(QUEUE_NAMES.autonomousLoop).add(
+      job,
+      { organizationId },
+      {
+        // A distinct id per request, so pressing the button twice genuinely
+        // runs twice rather than being silently deduplicated.
+        jobId: `manual-${job}-${organizationId}-${Date.now()}`,
+        removeOnComplete: { count: 50 },
+      },
+    );
+
+    await prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorType: 'user',
+        actorId: request.user!.id,
+        action: 'manual_run',
+        subjectType: 'job',
+        subjectId: job,
+      },
+    });
+
+    return { queued: true, job, jobId: queued.id };
+  });
+
+  /**
+   * Requeues failed publishing jobs.
+   *
+   * Deliberately refuses to retry an auth failure: the token is dead, so
+   * retrying consumes platform rate limit and cannot succeed. Those accounts
+   * are named in the response so the operator reconnects them instead.
+   */
+  app.post('/automation/publishing/retry', { preHandler: requireAuth('EDITOR') }, async (request, reply) => {
+    const { organizationId } = orgScope(request);
+
+    if (!ctx.queues) {
+      return reply.code(503).send({
+        error: 'QueueUnavailable',
+        code: 'API_ERROR',
+        message: 'Cannot reach the job queue. Check that Redis is running.',
+      });
+    }
+
+    const failed = await prisma.publishingJob.findMany({
+      where: { socialAccount: { organizationId }, status: 'FAILED' },
+      include: { socialAccount: { select: { username: true, platform: true } } },
+      take: 50,
+    });
+
+    const requeued: string[] = [];
+    const skipped: Array<{ jobId: string; account: string; reason: string }> = [];
+
+    for (const job of failed) {
+      if (job.lastErrorCode === 'AUTH_ERROR') {
+        skipped.push({
+          jobId: job.id,
+          account: `${job.socialAccount.platform} @${job.socialAccount.username}`,
+          reason: 'Credentials are invalid. Reconnect the account; retrying cannot succeed.',
+        });
+        continue;
+      }
+      if (job.lastErrorCode === 'CAPABILITY_NOT_SUPPORTED') {
+        skipped.push({
+          jobId: job.id,
+          account: `${job.socialAccount.platform} @${job.socialAccount.username}`,
+          reason: 'The platform API does not support this operation. Retrying cannot succeed.',
+        });
+        continue;
+      }
+
+      await prisma.publishingJob.update({
+        where: { id: job.id },
+        data: { status: 'SCHEDULED', lastError: null, lastErrorCode: null, scheduledAt: new Date() },
+      });
+      await ctx.queues.get(QUEUE_NAMES.publishing).add(
+        'publish',
+        { publishingJobId: job.id },
+        { jobId: `publish-retry-${job.id}-${Date.now()}` },
+      );
+      requeued.push(job.id);
+    }
+
+    await prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorType: 'user',
+        actorId: request.user!.id,
+        action: 'retry_failed_publishing',
+        diff: { requeued: requeued.length, skipped: skipped.length },
+      },
+    });
+
+    return { requeued: requeued.length, skipped };
   });
 
   /**

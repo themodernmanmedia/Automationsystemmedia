@@ -321,3 +321,125 @@ describe('error handling', () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe('manual runs', () => {
+  it('queues a job so an operator can inspect output before enabling autonomous mode', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/automation/run/render',
+      headers: { cookie: ownerCookie },
+      payload: {},
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().queued).toBe(true);
+    expect(res.json().job).toBe('render');
+  });
+
+  it('refuses to generate without an LLM provider rather than queueing a doomed job', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/automation/run/tick',
+      headers: { cookie: ownerCookie },
+      payload: {},
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe('PROVIDER_NOT_CONFIGURED');
+  });
+
+  it('lets the kill switch outrank a manual trigger', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/automation/kill',
+      headers: { cookie: ownerCookie },
+      payload: { engaged: true },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/automation/run/render',
+      headers: { cookie: ownerCookie },
+      payload: {},
+    });
+    // One operator stopping the system must not be overridden by another
+    // pressing Run now.
+    expect(res.statusCode).toBe(409);
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/automation/kill',
+      headers: { cookie: ownerCookie },
+      payload: { engaged: false },
+    });
+  });
+
+  it('rejects an unknown job name', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/automation/run/not-a-job',
+      headers: { cookie: ownerCookie },
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('records manual runs in the audit log', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/logs/audit', headers: { cookie: ownerCookie } });
+    expect(res.json().logs.map((l: { action: string }) => l.action)).toContain('manual_run');
+  });
+});
+
+describe('retrying failed posts', () => {
+  it('skips auth failures instead of burning rate limit on a dead token', async () => {
+    const account = await prisma.socialAccount.findFirst({
+      where: { organizationId, platform: 'INSTAGRAM' },
+    });
+    const piece = await prisma.contentPiece.create({
+      data: {
+        organizationId,
+        format: 'CAROUSEL',
+        status: 'FAILED',
+        category: 'BUSINESS',
+        title: 'Failed piece',
+        hook: 'hook',
+      },
+    });
+
+    // One dead-token failure and one transient failure.
+    await prisma.publishingJob.create({
+      data: {
+        contentPieceId: piece.id,
+        socialAccountId: account!.id,
+        platform: 'INSTAGRAM',
+        status: 'FAILED',
+        scheduledAt: new Date(),
+        lastErrorCode: 'AUTH_ERROR',
+        lastError: 'Token expired',
+        idempotencyKey: `retry-auth-${Date.now()}`,
+      },
+    });
+    await prisma.publishingJob.create({
+      data: {
+        contentPieceId: piece.id,
+        socialAccountId: account!.id,
+        platform: 'INSTAGRAM',
+        status: 'FAILED',
+        scheduledAt: new Date(),
+        lastErrorCode: 'API_ERROR',
+        lastError: 'Upstream 503',
+        idempotencyKey: `retry-api-${Date.now()}`,
+      },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/automation/publishing/retry',
+      headers: { cookie: ownerCookie },
+      payload: {},
+    });
+
+    const body = res.json();
+    expect(body.requeued).toBe(1);
+    expect(body.skipped).toHaveLength(1);
+    expect(body.skipped[0].reason).toMatch(/Reconnect the account/);
+  });
+});

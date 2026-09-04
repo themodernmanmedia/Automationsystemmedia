@@ -11,7 +11,7 @@ import { getConfig, configuredIntegrations, createLogger, Encryptor, type Config
 import { TokenStore, prisma } from '@mmos/db';
 import { AdapterRegistry } from '@mmos/platforms';
 import { AiOrchestrator, createLlmProvider, createSearchProviders, type LlmProvider, type SearchProvider } from '@mmos/ai';
-import { AnalyticsService, AutomationService, DbCostSink, PublishingService } from '@mmos/engine';
+import { AnalyticsService, AutomationService, DbCostSink, PublishingService, QueueRegistry } from '@mmos/engine';
 
 export interface AppContext {
   config: Config;
@@ -25,6 +25,8 @@ export interface AppContext {
   llm: LlmProvider | null;
   searchProviders: SearchProvider[];
   integrations: ReturnType<typeof configuredIntegrations>;
+  /** Null when Redis is unreachable; endpoints that enqueue say so explicitly. */
+  queues: QueueRegistry | null;
   /** Why an integration is unavailable, surfaced verbatim in the UI. */
   integrationErrors: Record<string, string>;
   orchestratorFor(organizationId: string): AiOrchestrator;
@@ -59,6 +61,17 @@ export function createContext(config: Config = getConfig()): AppContext {
     logger.warn({ err }, 'no research provider configured; trend discovery is unavailable');
   }
 
+  // The API enqueues work for the worker (manual runs, publish retries). A
+  // Redis failure must not prevent the server from starting — read-only routes
+  // still work, and the enqueueing routes report the outage plainly.
+  let queues: QueueRegistry | null = null;
+  try {
+    queues = new QueueRegistry(config.REDIS_URL);
+  } catch (err) {
+    integrationErrors['queue'] = (err as Error).message;
+    logger.error({ err }, 'could not connect to Redis; manual runs and retries are unavailable');
+  }
+
   const publishing = new PublishingService({ adapters, tokens, automation, logger });
   const analytics = new AnalyticsService({ adapters, tokens, logger });
 
@@ -74,6 +87,7 @@ export function createContext(config: Config = getConfig()): AppContext {
     llm,
     searchProviders,
     integrations: configuredIntegrations(config),
+    queues,
     integrationErrors,
     orchestratorFor(organizationId: string): AiOrchestrator {
       if (!llm) throw new Error(integrationErrors['llm'] ?? 'No LLM provider configured');

@@ -33,6 +33,7 @@ export function AutomationControls({ initial }: { initial: AutomationResponse })
   const [data, setData] = useState(initial);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function refresh() {
     setData(await clientFetch<AutomationResponse>('/automation'));
@@ -40,6 +41,7 @@ export function AutomationControls({ initial }: { initial: AutomationResponse })
 
   function act(fn: () => Promise<unknown>) {
     setError(null);
+    setNotice(null);
     startTransition(async () => {
       try {
         const result = (await fn()) as { error?: string };
@@ -61,6 +63,11 @@ export function AutomationControls({ initial }: { initial: AutomationResponse })
       {error && (
         <div className="card card-pad border-state-error/40">
           <div className="text-sm text-state-error">{error}</div>
+        </div>
+      )}
+      {notice && (
+        <div className="card card-pad border-state-ok/40">
+          <div className="text-sm text-state-ok">{notice}</div>
         </div>
       )}
 
@@ -154,6 +161,71 @@ export function AutomationControls({ initial }: { initial: AutomationResponse })
               }}
             >
               Clear queue
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Run now */}
+      <div className="card">
+        <div className="border-b border-ink-border px-5 py-4">
+          <div className="label">Run now</div>
+          <p className="mt-1 text-xs leading-relaxed text-bone-dim">
+            Runs a stage immediately, using the same code path the scheduler uses. Use this to see
+            what the system produces before trusting it to run unattended.
+          </p>
+        </div>
+        <div className="grid gap-px bg-ink-border sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            { job: 'tick', label: 'Discover & generate', hint: 'Scan trends, score, research, write' },
+            { job: 'render', label: 'Render Reels', hint: 'Voice and compose queued Reels' },
+            { job: 'analytics', label: 'Collect analytics', hint: 'Pull metrics for published posts' },
+            { job: 'snapshot', label: 'Snapshot accounts', hint: 'Record follower counts' },
+          ].map((item) => (
+            <div key={item.job} className="bg-ink-soft p-5">
+              <div className="text-sm font-medium text-bone">{item.label}</div>
+              <p className="mt-1 min-h-[2.25rem] text-xs leading-relaxed text-bone-muted">{item.hint}</p>
+              <button
+                className="btn-ghost mt-2 w-full"
+                disabled={pending || state.killSwitch || (item.job === 'tick' && !llmReady)}
+                onClick={() =>
+                  act(async () => {
+                    await clientFetch(`/automation/run/${item.job}`, { method: 'POST', body: '{}' });
+                    setNotice(`Queued "${item.label}". Watch the agent list below and the Content page for results.`);
+                  })
+                }
+              >
+                Run now
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="border-t border-ink-border px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium text-bone">Retry failed posts</div>
+              <p className="mt-1 text-xs leading-relaxed text-bone-muted">
+                Requeues failed publishing jobs. Authentication failures are skipped — the token is
+                dead, so retrying only consumes platform rate limit.
+              </p>
+            </div>
+            <button
+              className="btn-ghost shrink-0"
+              disabled={pending || state.killSwitch}
+              onClick={() =>
+                act(async () => {
+                  const result = (await clientFetch('/automation/publishing/retry', {
+                    method: 'POST',
+                    body: '{}',
+                  })) as { requeued: number; skipped: Array<{ account: string; reason: string }> };
+                  const skippedNote = result.skipped.length
+                    ? ` ${result.skipped.length} skipped — reconnect: ${[...new Set(result.skipped.map((s) => s.account))].join(', ')}.`
+                    : '';
+                  setNotice(`Requeued ${result.requeued} job(s).${skippedNote}`);
+                })
+              }
+            >
+              Retry failed
             </button>
           </div>
         </div>

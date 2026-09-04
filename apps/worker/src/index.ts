@@ -10,15 +10,16 @@ import { getConfig, createLogger, ForbiddenError, type Logger } from '@mmos/core
 import { prisma, TokenStore, disconnect } from '@mmos/db';
 import { AdapterRegistry } from '@mmos/platforms';
 import { AiOrchestrator, createLlmProvider, createSearchProviders, createVoiceProvider, createImageProvider, type ImageProvider, type LlmProvider, type SearchProvider, type VoiceProvider } from '@mmos/ai';
-import { AnalyticsService, AutomationService, DbCostSink, PublishingService, assessQueueHealth } from '@mmos/engine';
-import { QUEUE_NAMES, QueueRegistry } from './queues.js';
+import {
+  AnalyticsService, AutomationService, DbCostSink, PublishingService,
+  QUEUE_NAMES, QueueRegistry, assessQueueHealth, distributePostTimes,
+} from '@mmos/engine';
 import { createPublishingWorker, reconcileScheduledJobs, refreshExpiringTokens } from './jobs/publishing.js';
 import { runResearch, runTopicScoring, runTrendScan, type PipelineDeps } from './jobs/pipeline.js';
 import { generateFromTopic } from './jobs/generation.js';
 import { renderPendingReels } from './jobs/reel-render.js';
 import { ReelCompositor } from '@mmos/media';
 import { S3StorageProvider, type StorageProvider } from '@mmos/ai';
-import { distributePostTimes } from '@mmos/engine';
 
 const config = getConfig();
 const logger = createLogger({
@@ -239,8 +240,11 @@ async function autonomousTick(organizationId: string): Promise<void> {
 async function forEachOrganization(
   taskName: string,
   task: (organizationId: string) => Promise<void>,
+  onlyOrganizationId?: string,
 ): Promise<void> {
-  const organizations = await prisma.organization.findMany({ select: { id: true } });
+  const organizations = onlyOrganizationId
+    ? [{ id: onlyOrganizationId }]
+    : await prisma.organization.findMany({ select: { id: true } });
   for (const org of organizations) {
     try {
       await task(org.id);
@@ -262,9 +266,13 @@ async function main(): Promise<void> {
   const loopWorker = new Worker(
     QUEUE_NAMES.autonomousLoop,
     async (job) => {
+      // Present when a human triggered this from the dashboard; absent for the
+      // scheduled run, which covers every organization.
+      const only = (job.data as { organizationId?: string } | undefined)?.organizationId;
+
       switch (job.name) {
         case 'tick':
-          await forEachOrganization('autonomous-tick', autonomousTick);
+          await forEachOrganization('autonomous-tick', autonomousTick, only);
           return;
         case 'render':
           await forEachOrganization('reel-render', async (organizationId) => {
@@ -278,20 +286,20 @@ async function main(): Promise<void> {
             if (result.rendered > 0 || result.failed > 0) {
               logger.info({ organizationId, ...result }, 'reel render pass complete');
             }
-          });
+          }, only);
           return;
         case 'analytics':
           await forEachOrganization('analytics', async (organizationId) => {
             await automation.assertMayRun(organizationId, 'analytics');
             const result = await analytics.collectForOrganization(organizationId);
             logger.info({ organizationId, ...result }, 'analytics collected');
-          });
+          }, only);
           return;
         case 'snapshot':
           await forEachOrganization('snapshot', async (organizationId) => {
             const count = await analytics.snapshotAccounts(organizationId);
             logger.info({ organizationId, count }, 'account snapshots captured');
-          });
+          }, only);
           return;
         case 'tokens':
           await refreshExpiringTokens({ tokens, adapters, logger }).then((r) =>
@@ -315,12 +323,12 @@ async function main(): Promise<void> {
   // Repeatable schedules. Cadences follow the brief: hourly trend scanning,
   // frequent analytics, daily snapshots.
   const loopQueue = queues.get(QUEUE_NAMES.autonomousLoop);
-  await loopQueue.add('tick', {}, { repeat: { pattern: '*/15 * * * *' }, jobId: 'repeat:tick' });
-  await loopQueue.add('render', {}, { repeat: { pattern: '*/10 * * * *' }, jobId: 'repeat:render' });
-  await loopQueue.add('analytics', {}, { repeat: { pattern: '0 */2 * * *' }, jobId: 'repeat:analytics' });
-  await loopQueue.add('snapshot', {}, { repeat: { pattern: '0 3 * * *' }, jobId: 'repeat:snapshot' });
-  await loopQueue.add('tokens', {}, { repeat: { pattern: '0 * * * *' }, jobId: 'repeat:tokens' });
-  await loopQueue.add('reconcile', {}, { repeat: { pattern: '*/30 * * * *' }, jobId: 'repeat:reconcile' });
+  await loopQueue.add('tick', {}, { repeat: { pattern: '*/15 * * * *' }, jobId: 'repeat-tick' });
+  await loopQueue.add('render', {}, { repeat: { pattern: '*/10 * * * *' }, jobId: 'repeat-render' });
+  await loopQueue.add('analytics', {}, { repeat: { pattern: '0 */2 * * *' }, jobId: 'repeat-analytics' });
+  await loopQueue.add('snapshot', {}, { repeat: { pattern: '0 3 * * *' }, jobId: 'repeat-snapshot' });
+  await loopQueue.add('tokens', {}, { repeat: { pattern: '0 * * * *' }, jobId: 'repeat-tokens' });
+  await loopQueue.add('reconcile', {}, { repeat: { pattern: '*/30 * * * *' }, jobId: 'repeat-reconcile' });
 
   // On boot, re-arm every timer from the database. This is what makes a Redis
   // loss survivable: the intent was never stored only in Redis.
