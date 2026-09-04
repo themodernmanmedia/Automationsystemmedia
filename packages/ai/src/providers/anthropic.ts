@@ -8,7 +8,7 @@
 import { AiError, ProviderNotConfiguredError, withRetry } from '@mmos/core';
 import type { z } from 'zod';
 import type { LlmProvider, LlmRequest, LlmResponse, LlmUsage } from '../types.js';
-import { extractJson } from '../json.js';
+import { completeStructuredWith } from '../structured.js';
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const API_VERSION = '2023-06-01';
@@ -109,28 +109,12 @@ export class AnthropicProvider implements LlmProvider {
       .join('\n')
       .trim();
 
-    const response = await this.complete({ ...request, system });
-
-    let parsed: unknown;
-    try {
-      parsed = extractJson(response.text);
-    } catch (err) {
-      throw new AiError(`Anthropic did not return parseable JSON for ${schemaName}: ${(err as Error).message}`, {
-        retryable: true,
-        context: { preview: response.text.slice(0, 500) },
-      });
-    }
-
-    const result = schema.safeParse(parsed);
-    if (!result.success) {
-      // Retryable on purpose: a schema miss is usually a one-off sampling
-      // artifact, and the caller's retry gives a second sample.
-      throw new AiError(
-        `Anthropic output failed ${schemaName} validation: ${result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
-        { retryable: true, context: { preview: response.text.slice(0, 500) } },
-      );
-    }
-
-    return { data: result.data, usage: response.usage, model: response.model };
+    return completeStructuredWith({
+      providerName: 'Anthropic',
+      complete: (req) => this.complete({ ...req, system }),
+      request,
+      schema,
+      schemaName,
+    });
   }
 }

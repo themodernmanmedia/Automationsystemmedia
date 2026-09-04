@@ -2,6 +2,7 @@ export * from './types.js';
 export * from './orchestrator.js';
 export * from './factory.js';
 export * from './json.js';
+export * from './structured.js';
 export { AnthropicProvider } from './providers/anthropic.js';
 export { OpenAiProvider } from './providers/openai.js';
 export { OpenAiImageProvider } from './providers/openai-image.js';

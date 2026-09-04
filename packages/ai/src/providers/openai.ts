@@ -5,7 +5,7 @@
 import { AiError, ProviderNotConfiguredError, withRetry } from '@mmos/core';
 import type { z } from 'zod';
 import type { LlmProvider, LlmRequest, LlmResponse, LlmUsage } from '../types.js';
-import { extractJson } from '../json.js';
+import { completeStructuredWith } from '../structured.js';
 
 const API_URL = 'https://api.openai.com/v1/chat/completions';
 
@@ -101,25 +101,12 @@ export class OpenAiProvider implements LlmProvider {
       .join('\n')
       .trim();
 
-    const response = await this.#call({ ...request, system }, true);
-
-    let parsed: unknown;
-    try {
-      parsed = extractJson(response.text);
-    } catch (err) {
-      throw new AiError(`OpenAI did not return parseable JSON for ${schemaName}: ${(err as Error).message}`, {
-        retryable: true,
-        context: { preview: response.text.slice(0, 500) },
-      });
-    }
-
-    const result = schema.safeParse(parsed);
-    if (!result.success) {
-      throw new AiError(
-        `OpenAI output failed ${schemaName} validation: ${result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
-        { retryable: true, context: { preview: response.text.slice(0, 500) } },
-      );
-    }
-    return { data: result.data, usage: response.usage, model: response.model };
+    return completeStructuredWith({
+      providerName: 'OpenAI',
+      complete: (req) => this.#call({ ...req, system }, true),
+      request,
+      schema,
+      schemaName,
+    });
   }
 }
