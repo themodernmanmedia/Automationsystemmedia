@@ -109,6 +109,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // Cascades remove every content piece, reel, and asset this suite created,
+  // so nothing is left behind for the next suite.
   await prisma.organization.deleteMany({ where: { id: organizationId } });
   await rm(workDir, { recursive: true, force: true });
   await prisma.$disconnect();
