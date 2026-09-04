@@ -76,12 +76,23 @@ openssl rand -base64 32       # ENCRYPTION_KEY
 openssl rand -base64 32       # SESSION_SECRET
 
 pnpm db:migrate
-pnpm db:seed
 
 pnpm dev:api                  # :4000
 pnpm dev:worker
 pnpm dev:web                  # :3000
 ```
+
+Then open <http://localhost:3000>, register the first account, and seed the
+default brand:
+
+```bash
+pnpm db:seed                  # after registering — it seeds the brand for the
+                              # organization that registration created
+```
+
+Registration is single-use: it creates the one organization and its `OWNER`, and
+is closed afterwards. Seeding before that point exits with an error telling you
+so, because a brand has to belong to an organization.
 
 Minimum to boot: Postgres, Redis, `ENCRYPTION_KEY`, `SESSION_SECRET`, and one
 LLM API key. Platform credentials and S3 are needed to actually publish; the
