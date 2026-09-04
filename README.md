@@ -18,6 +18,7 @@ fakes an integration, fabricates a metric, or shows a button that cannot work.
 | [`docs/platform-capabilities.md`](docs/platform-capabilities.md) | Per-platform capability matrix |
 | [`docs/API_LIMITATIONS.md`](docs/API_LIMITATIONS.md) | What cannot be automated, and why |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | Threat model and controls |
+| [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | **Start here.** Empty `.env` to first live post, in order |
 | [`docs/PLATFORM_SETUP.md`](docs/PLATFORM_SETUP.md) | Obtaining the credentials, step by step |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Running it in production |
 | [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Diagnosing common failures |
