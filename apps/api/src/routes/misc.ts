@@ -14,11 +14,25 @@ export async function miscRoutes(app: FastifyInstance, ctx: AppContext): Promise
   /* ------------------------------- health ------------------------------- */
 
   app.get('/health', async (_request, reply) => {
-    const db = await healthcheck();
-    const ok = db.ok;
+    // Redis is checked as well as the database. The API starts without Redis on
+    // purpose — a queue outage must not take the whole service down — but
+    // nothing can be scheduled or published while it is unreachable, so
+    // reporting "healthy" in that state would be a lie an operator acts on.
+    const [db, queue] = await Promise.all([
+      healthcheck(),
+      ctx.queues?.healthcheck() ??
+        Promise.resolve({
+          ok: false,
+          latencyMs: 0,
+          error:
+            ctx.integrationErrors['queue'] ??
+            'Queue is unavailable: the API could not connect to Redis at startup. Publishing and scheduling will not run.',
+        }),
+    ]);
+    const ok = db.ok && queue.ok;
     return reply.code(ok ? 200 : 503).send({
       status: ok ? 'healthy' : 'degraded',
-      checks: { database: db },
+      checks: { database: db, queue },
       integrations: ctx.integrations,
       integrationErrors: ctx.integrationErrors,
       version: '0.1.0',

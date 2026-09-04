@@ -27,6 +27,14 @@ The `.env` belongs at the **repository root**, not inside `packages/db` or
 variable is set in the real environment, that value wins over the file — check
 for a stale export shadowing what you edited.
 
+## Nothing publishes, but everything looks fine
+
+Check `GET /api/health` → `checks.queue`. The API starts deliberately without
+Redis, so that a queue outage cannot take the whole service down — but nothing
+can be scheduled or published while it is unreachable. The health endpoint
+reports `degraded` with HTTP 503 and names the reason, rather than reporting
+healthy because the database happens to be up.
+
 ## Queue tests fail intermittently
 
 Stop the worker before running the suite. The queue tests assert on what is

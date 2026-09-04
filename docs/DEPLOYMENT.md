@@ -105,3 +105,15 @@ previous image; migrations are additive, so an older application generally runs
 against a newer schema. If a release is misbehaving in a way that could publish
 bad content, **engage the kill switch first** (`POST /api/automation/kill`), then
 roll back. Stopping output matters more than a clean deploy.
+
+## Health checks
+
+`GET /api/health` returns 200 only when both Postgres and Redis answer;
+otherwise 503 with `status: "degraded"` and a per-check reason. Point the load
+balancer at it.
+
+The Redis probe is raced against a 2-second timeout. BullMQ requires
+`maxRetriesPerRequest: null` on its connection, which makes ioredis queue
+commands indefinitely against an unreachable server instead of failing them —
+so an unraced probe would hang, and an orchestrator would read that timeout as
+a dead container and restart a service that was only missing its queue.

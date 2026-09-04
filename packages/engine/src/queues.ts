@@ -101,6 +101,36 @@ export class QueueRegistry {
     }
   }
 
+  /**
+   * Liveness probe for the health endpoint.
+   *
+   * Worth reporting separately from the database: the API deliberately starts
+   * without Redis so a queue outage cannot take the whole service down, but
+   * everything that publishes runs through it. Without this, a health check
+   * would say "healthy" while nothing could be scheduled or published.
+   */
+  async healthcheck(timeoutMs = 2_000): Promise<{ ok: boolean; latencyMs: number; error?: string }> {
+    const start = Date.now();
+    try {
+      // The ping MUST be raced against a timeout. BullMQ requires
+      // `maxRetriesPerRequest: null` on its connection, which means ioredis
+      // queues commands indefinitely while the server is unreachable rather
+      // than failing them — so an unraced ping never settles, and the health
+      // endpoint hangs instead of answering. A health check that hangs is
+      // worse than one that is wrong: an orchestrator reads the timeout as a
+      // dead container and restarts a service that was merely missing Redis.
+      await Promise.race([
+        this.#connection.ping(),
+        new Promise((_resolve, reject) =>
+          setTimeout(() => reject(new Error(`Redis did not respond within ${timeoutMs}ms`)), timeoutMs).unref(),
+        ),
+      ]);
+      return { ok: true, latencyMs: Date.now() - start };
+    } catch (err) {
+      return { ok: false, latencyMs: Date.now() - start, error: (err as Error).message };
+    }
+  }
+
   async close(): Promise<void> {
     for (const queue of this.#queues.values()) await queue.close();
     await this.#connection.quit();

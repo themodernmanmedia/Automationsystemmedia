@@ -79,3 +79,28 @@ describe('queue registry', () => {
     expect((counts['waiting'] ?? 0) + (counts['delayed'] ?? 0)).toBe(0);
   });
 });
+
+describe('healthcheck', () => {
+  it('reports a reachable queue', async () => {
+    const result = await queues.healthcheck();
+    expect(result.ok).toBe(true);
+  });
+
+  it('answers within the timeout instead of hanging when Redis is unreachable', async () => {
+    // The regression this pins: BullMQ requires `maxRetriesPerRequest: null`,
+    // so ioredis queues commands indefinitely against a dead server rather than
+    // failing them. An unraced ping therefore never settles and the health
+    // endpoint hangs — which an orchestrator reads as a dead container and
+    // restarts, over a service that was only missing Redis.
+    const dead = new QueueRegistry('redis://127.0.0.1:6390');
+    try {
+      const start = Date.now();
+      const result = await dead.healthcheck(300);
+      expect(result.ok).toBe(false);
+      expect(result.error).toBeDefined();
+      expect(Date.now() - start).toBeLessThan(3_000);
+    } finally {
+      dead.connection.disconnect();
+    }
+  });
+});
