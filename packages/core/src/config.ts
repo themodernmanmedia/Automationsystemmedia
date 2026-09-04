@@ -82,6 +82,11 @@ export const configSchema = z.object({
   ELEVENLABS_VOICE_ID: z.string().optional(),
   STABILITY_API_KEY: z.string().optional(),
 
+  // Licensed stock imagery. Both licence for commercial use; both require
+  // crediting the photographer under their API terms.
+  UNSPLASH_ACCESS_KEY: z.string().optional(),
+  PEXELS_API_KEY: z.string().optional(),
+
   SEARCH_PROVIDER: z.enum(['brave', 'tavily', 'none']).default('none'),
   BRAVE_SEARCH_API_KEY: z.string().optional(),
   TAVILY_API_KEY: z.string().optional(),
@@ -148,6 +153,7 @@ export interface ConfiguredIntegrations {
   storage: boolean;
   llm: boolean;
   image: boolean;
+  stock: boolean;
   voice: boolean;
   search: boolean;
   meta: boolean;
@@ -163,6 +169,7 @@ export function configuredIntegrations(c: Config): ConfiguredIntegrations {
     image:
       (c.IMAGE_PROVIDER === 'openai' && Boolean(c.OPENAI_API_KEY)) ||
       (c.IMAGE_PROVIDER === 'stability' && Boolean(c.STABILITY_API_KEY)),
+    stock: Boolean(c.UNSPLASH_ACCESS_KEY) || Boolean(c.PEXELS_API_KEY),
     voice:
       (c.VOICE_PROVIDER === 'elevenlabs' && Boolean(c.ELEVENLABS_API_KEY)) ||
       (c.VOICE_PROVIDER === 'openai' && Boolean(c.OPENAI_API_KEY)),

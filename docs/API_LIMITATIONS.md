@@ -62,6 +62,18 @@ services**. `FFMPEG_PATH` must point at a real FFmpeg binary.
 are implemented. Providers without credentials configured throw
 `ProviderNotConfiguredError` at call time — they do not return fake media.
 
+### 8b. Imagery is generated or licensed — never simply taken
+The system has exactly two routes to a picture: generate it, or take it from a
+provider whose licence terms it can record (Unsplash, Pexels). There is no path
+that fetches an arbitrary image from the web, because there would be no
+defensible answer to "may we publish this commercially?" — public accessibility
+is not a licence.
+**Consequence:** with no image provider and no stock key configured, slides
+render on the brand background. That is a deliberate editorial look rather than
+a failure, and it never blocks a post. Where a licence requires crediting the
+photographer, the credit is appended to the caption automatically and the
+rights agent refuses to publish an asset whose attribution is missing.
+
 ### 9. Fact-checking is assisted, not guaranteed
 The fact checker cross-references retrieved sources. It substantially reduces the rate of
 false claims; it does not eliminate it. Treat `VERIFIED` as "corroborated by retrieved

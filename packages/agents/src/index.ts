@@ -15,6 +15,8 @@ export * from './content/carousel-writer.js';
 export * from './content/carousel-designer.js';
 export * from './content/reel-writer.js';
 
+export * from './media/sourcing.js';
+
 export * from './qa/platform-qa.js';
 export * from './qa/rights.js';
 export * from './qa/reviewers.js';

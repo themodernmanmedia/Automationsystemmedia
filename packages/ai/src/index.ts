@@ -8,5 +8,7 @@ export { OpenAiProvider } from './providers/openai.js';
 export { OpenAiImageProvider } from './providers/openai-image.js';
 export { ElevenLabsVoiceProvider, OpenAiVoiceProvider } from './providers/voice.js';
 export { BraveSearchProvider, TavilySearchProvider, RssSearchProvider } from './providers/search.js';
+export { UnsplashProvider, PexelsProvider } from './providers/stock.js';
+export type { StockImage, StockImageProvider, StockSearchOptions } from './providers/stock.js';
 export { S3StorageProvider } from './providers/storage.js';
 export type { S3Config } from './providers/storage.js';

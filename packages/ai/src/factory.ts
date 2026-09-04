@@ -8,6 +8,7 @@
 import type { Config } from '@mmos/core';
 import { ProviderNotConfiguredError } from '@mmos/core';
 import type { ImageProvider, LlmProvider, SearchProvider, VoiceProvider } from './types.js';
+import { PexelsProvider, UnsplashProvider, type StockImageProvider } from './providers/stock.js';
 import { AnthropicProvider } from './providers/anthropic.js';
 import { OpenAiProvider } from './providers/openai.js';
 import { OpenAiImageProvider } from './providers/openai-image.js';
@@ -70,6 +71,24 @@ export function createSearchProviders(config: Config): SearchProvider[] {
       'or BRAVE_SEARCH_API_KEY',
       'or TAVILY_API_KEY',
     ]);
+  }
+  return providers;
+}
+
+
+/**
+ * Licensed stock providers, in preference order.
+ *
+ * Returns an empty list rather than throwing: stock is optional, and a piece
+ * with no imagery still publishes on the brand background.
+ */
+export function createStockProviders(config: Config): StockImageProvider[] {
+  const providers: StockImageProvider[] = [];
+  if (config.UNSPLASH_ACCESS_KEY) {
+    providers.push(new UnsplashProvider({ accessKey: config.UNSPLASH_ACCESS_KEY }));
+  }
+  if (config.PEXELS_API_KEY) {
+    providers.push(new PexelsProvider({ apiKey: config.PEXELS_API_KEY }));
   }
   return providers;
 }

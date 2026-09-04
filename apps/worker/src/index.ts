@@ -9,7 +9,7 @@ import { Worker } from 'bullmq';
 import { getConfig, createLogger, ForbiddenError, type Logger } from '@mmos/core';
 import { prisma, TokenStore, disconnect } from '@mmos/db';
 import { AdapterRegistry } from '@mmos/platforms';
-import { AiOrchestrator, createLlmProvider, createSearchProviders, createVoiceProvider, createImageProvider, type ImageProvider, type LlmProvider, type SearchProvider, type VoiceProvider } from '@mmos/ai';
+import { AiOrchestrator, createLlmProvider, createSearchProviders, createVoiceProvider, createImageProvider, createStockProviders, type ImageProvider, type LlmProvider, type SearchProvider, type StockImageProvider, type VoiceProvider } from '@mmos/ai';
 import {
   AnalyticsService, AutomationService, DbCostSink, PublishingService,
   QUEUE_NAMES, QueueRegistry, assessQueueHealth, distributePostTimes,
@@ -81,6 +81,13 @@ try {
   image = createImageProvider(config);
 } catch {
   logger.info('no image provider configured; reel beats will use the brand background');
+}
+
+// Optional: licensed stock photography, used when generation is unavailable
+// or the caller prefers real imagery.
+const stock: StockImageProvider[] = createStockProviders(config);
+if (stock.length === 0) {
+  logger.info('no stock image provider configured; slides use generated or brand-background visuals');
 }
 
 const compositor = new ReelCompositor({
@@ -207,8 +214,11 @@ async function autonomousTick(organizationId: string): Promise<void> {
     for (const topic of researched) {
       try {
         const result = await generateFromTopic(
-          { organizationId, orchestrator: deps.orchestrator, storage, automation, logger,
-            chromiumPath: process.env['CHROMIUM_PATH'] ?? undefined },
+          {
+            organizationId, orchestrator: deps.orchestrator, storage, automation, logger,
+            image, stock,
+            chromiumPath: process.env['CHROMIUM_PATH'] ?? undefined,
+          },
           topic.id,
         );
         log.info(result, 'content generated');
