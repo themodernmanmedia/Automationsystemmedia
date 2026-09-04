@@ -15,6 +15,7 @@ import { oauthRoutes } from './routes/oauth.js';
 import { automationRoutes } from './routes/automation.js';
 import { contentRoutes } from './routes/content.js';
 import { miscRoutes } from './routes/misc.js';
+import { experimentRoutes } from './routes/experiments.js';
 
 export async function buildServer(ctx: AppContext = createContext()) {
   const app = Fastify({ logger: false, trustProxy: true, bodyLimit: 10 * 1024 * 1024 });
@@ -92,6 +93,7 @@ export async function buildServer(ctx: AppContext = createContext()) {
     await automationRoutes(scoped, ctx);
     await contentRoutes(scoped, ctx);
     await miscRoutes(scoped, ctx);
+    await experimentRoutes(scoped, ctx);
   }, { prefix: '/api' });
 
   return app;

@@ -79,6 +79,16 @@ The fact checker cross-references retrieved sources. It substantially reduces th
 false claims; it does not eliminate it. Treat `VERIFIED` as "corroborated by retrieved
 sources", not "true".
 
+### 9b. Experiments need real volume before they can conclude
+An experiment concludes only when every arm reaches its sample floor and the
+arms separate at 95% confidence on a two-sided Welch's t-test. At a few posts a
+day, a two-arm experiment with a floor of 10 needs roughly a week of output
+before it can say anything at all.
+**Consequence:** most experiments will read INCONCLUSIVE, and that is the
+correct answer rather than a failure. The system records it and changes nothing.
+Adopting whichever arm happened to lead is how noise gets baked into strategy,
+so only a confirmed winner is written to memory.
+
 ### 10. "Viral potential" is a ranking score, not a prediction
 `ViralPotentialScore` orders a queue. It does not predict virality, and the UI labels it
 as a ranking aid. Anyone claiming otherwise is selling something.

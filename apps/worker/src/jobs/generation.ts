@@ -36,6 +36,7 @@ import { CarouselRenderer } from '@mmos/media';
 import type { PlatformName, CreatePostInput } from '@mmos/platforms';
 import type { AutomationService } from '@mmos/engine';
 import { DbRunSink } from './pipeline.js';
+import { assignToExperiment } from './experiments.js';
 
 export interface GenerationDeps {
   organizationId: string;
@@ -163,8 +164,15 @@ export async function generateFromTopic(
     },
   });
 
+  // Join a running experiment, if one is open. Assignment is deterministic on
+  // the piece id, so a regenerated piece stays in the same arm.
+  const assignment = await assignToExperiment(deps.organizationId, piece.id, deps.logger);
+
   const attribution = { operation: 'generation', topicId, contentPieceId: piece.id };
-  log.info({ contentPieceId: piece.id, format }, 'generating content');
+  log.info(
+    { contentPieceId: piece.id, format, experimentArm: assignment?.variant ?? null },
+    'generating content',
+  );
 
   const strategyText = [
     `Angle: ${strategy.angle}`,

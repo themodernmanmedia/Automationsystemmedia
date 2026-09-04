@@ -22,3 +22,4 @@ export * from './qa/rights.js';
 export * from './qa/reviewers.js';
 
 export * from './learning/engine.js';
+export * from './learning/experiments.js';

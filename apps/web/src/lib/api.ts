@@ -272,3 +272,27 @@ export interface AuditLogResponse {
     createdAt: string;
   }>;
 }
+
+export interface ExperimentsResponse {
+  experiments: Array<{
+    id: string;
+    name: string;
+    hypothesis: string;
+    variable: string;
+    variants: Array<{ key: string; description: string }>;
+    status: string;
+    minSampleSize: number;
+    winner: string | null;
+    conclusion: string | null;
+    startedAt: string | null;
+    completedAt: string | null;
+    results: {
+      verdict: string;
+      variants: Array<{ key: string; sampleSize: number; mean: number; stdDev: number }>;
+      comparison: { leader: string; challenger: string; lift: number; significant: boolean } | null;
+      shortfall: Record<string, number>;
+    } | null;
+    _count: { contentPieces: number };
+  }>;
+  testableVariables: string[];
+}

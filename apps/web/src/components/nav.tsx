@@ -13,6 +13,7 @@ const SECTIONS = [
   ]},
   { group: 'Measure', items: [
     { href: '/analytics', label: 'Analytics' },
+    { href: '/experiments', label: 'Experiments' },
     { href: '/logs', label: 'Logs' },
   ]},
   { group: 'Configure', items: [

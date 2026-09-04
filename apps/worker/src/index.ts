@@ -19,6 +19,7 @@ import { runResearch, runTopicScoring, runTrendScan, type PipelineDeps } from '.
 import { generateFromTopic } from './jobs/generation.js';
 import { renderPendingReels } from './jobs/reel-render.js';
 import { learnedPostingHours, runLearningCycle } from './jobs/learning.js';
+import { evaluateExperiments } from './jobs/experiments.js';
 import { ReelCompositor } from '@mmos/media';
 import { S3StorageProvider, type StorageProvider } from '@mmos/ai';
 
@@ -306,6 +307,13 @@ async function main(): Promise<void> {
           await forEachOrganization('learning', async (organizationId) => {
             const result = await runLearningCycle({ organizationId, automation, logger });
             logger.info({ organizationId, ...result }, 'learning cycle finished');
+
+            // Experiments are evaluated on the same cadence: both read the same
+            // performance data, so running them together keeps them consistent.
+            const experiments = await evaluateExperiments({ organizationId, automation, logger });
+            if (experiments.length > 0) {
+              logger.info({ organizationId, experiments }, 'experiments evaluated');
+            }
           }, only);
           return;
         case 'analytics':

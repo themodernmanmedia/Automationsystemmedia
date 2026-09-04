@@ -464,6 +464,11 @@ model ContentPiece {
   contentHash String?
   embedding   Float[]
 
+  /// Set when this piece was produced as part of a running experiment.
+  /// Assignment is deterministic, so a retry lands in the same arm.
+  experimentId      String?
+  experimentVariant String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -471,6 +476,7 @@ model ContentPiece {
   brand         Brand?        @relation(fields: [brandId], references: [id], onDelete: SetNull)
   topic         Topic?        @relation(fields: [topicId], references: [id], onDelete: SetNull)
   contentIdea   ContentIdea?  @relation(fields: [contentIdeaId], references: [id], onDelete: SetNull)
+  experiment    Experiment?   @relation(fields: [experimentId], references: [id], onDelete: SetNull)
 
   carousel       CarouselPost?
   reel           Reel?
@@ -485,6 +491,7 @@ model ContentPiece {
   @@index([organizationId, status])
   @@index([organizationId, format])
   @@index([contentHash])
+  @@index([experimentId])
   @@map("content_pieces")
 }
 
@@ -956,7 +963,8 @@ model Experiment {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contentPieces ContentPiece[]
 
   @@index([organizationId, status])
   @@map("experiments")
