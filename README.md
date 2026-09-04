@@ -68,6 +68,20 @@ only claims that survived fact-checking can reach a published asset, and
 anything the system is not confident about leaves the automated path instead of
 shipping.
 
+## Running it without installing anything
+
+Open the repository on GitHub → **Code ▾ → Codespaces → Create codespace**. The
+devcontainer brings up Node 22, Postgres 16, Redis 7, FFmpeg and Chromium,
+installs dependencies, generates real `ENCRYPTION_KEY` and `SESSION_SECRET`
+values, and migrates the database. You land where Phase 1 of the runbook ends;
+add an LLM key to `.env` and carry on from Phase 2.
+
+**A Codespace is for building and evaluating, not for running the system.** It
+stops when you stop using it, and Instagram and TikTok posts are self-timed by
+this worker rather than held by the platform — so a scheduled post whose moment
+arrives while the Codespace is asleep does not go out. Production belongs on a
+host that stays up (`docs/DEPLOYMENT.md`).
+
 ## Quick start
 
 ```bash

@@ -1,7 +1,9 @@
 name: CI
 
 on:
-  push: { branches: [main] }
+  # Every branch, not just main: work happens on branches, and a check that
+  # only runs once a pull request exists reports too late to be useful.
+  push:
   pull_request:
 
 jobs:

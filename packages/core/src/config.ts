@@ -96,6 +96,22 @@ const bool = z
   .optional()
   .transform((v) => v === 'true' || v === '1');
 
+/**
+ * An optional enum that treats an empty string as "not set".
+ *
+ * `KEY=` with nothing after it is the natural way to leave a value blank in a
+ * `.env`, and `.env.example` ships exactly that for the optional providers.
+ * Zod's `.default()` only applies when a key is ABSENT, so a blank line failed
+ * validation instead — meaning `cp .env.example .env` produced a file the app
+ * refused to boot on, complaining about three providers nobody asked for.
+ */
+const optionalEnum = <T extends readonly [string, ...string[]]>(values: T, fallback: T[number]) =>
+  z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v.trim() === '' ? fallback : v.trim()))
+    .pipe(z.enum(values));
+
 const num = (fallback: number) =>
   z
     .string()
@@ -104,8 +120,8 @@ const num = (fallback: number) =>
     .pipe(z.number().finite());
 
 export const configSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
-  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']).default('info'),
+  NODE_ENV: optionalEnum(['development', 'test', 'staging', 'production'] as const, 'development'),
+  LOG_LEVEL: optionalEnum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'] as const, 'info'),
   API_PORT: num(4000),
   API_BASE_URL: z.string().url().default('http://localhost:4000'),
   WEB_BASE_URL: z.string().url().default('http://localhost:3000'),
@@ -124,7 +140,7 @@ export const configSchema = z.object({
   S3_SECRET_ACCESS_KEY: z.string().optional(),
   S3_PUBLIC_BASE_URL: z.string().optional(),
 
-  LLM_PROVIDER: z.enum(['anthropic', 'openai']).default('anthropic'),
+  LLM_PROVIDER: optionalEnum(['anthropic', 'openai'] as const, 'anthropic'),
   ANTHROPIC_API_KEY: z.string().optional(),
   // The strongest model is the default, because nearly every call either
   // writes something that will be published under the brand's name or decides
@@ -136,8 +152,8 @@ export const configSchema = z.object({
   OPENAI_MODEL: z.string().default('gpt-4o'),
   OPENAI_FAST_MODEL: z.string().default('gpt-4o-mini'),
 
-  IMAGE_PROVIDER: z.enum(['openai', 'stability', 'none']).default('none'),
-  VOICE_PROVIDER: z.enum(['elevenlabs', 'openai', 'none']).default('none'),
+  IMAGE_PROVIDER: optionalEnum(['openai', 'stability', 'none'] as const, 'none'),
+  VOICE_PROVIDER: optionalEnum(['elevenlabs', 'openai', 'none'] as const, 'none'),
   ELEVENLABS_API_KEY: z.string().optional(),
   ELEVENLABS_VOICE_ID: z.string().optional(),
   STABILITY_API_KEY: z.string().optional(),
@@ -147,7 +163,7 @@ export const configSchema = z.object({
   UNSPLASH_ACCESS_KEY: z.string().optional(),
   PEXELS_API_KEY: z.string().optional(),
 
-  SEARCH_PROVIDER: z.enum(['brave', 'tavily', 'none']).default('none'),
+  SEARCH_PROVIDER: optionalEnum(['brave', 'tavily', 'none'] as const, 'none'),
   BRAVE_SEARCH_API_KEY: z.string().optional(),
   TAVILY_API_KEY: z.string().optional(),
   NEWSAPI_KEY: z.string().optional(),

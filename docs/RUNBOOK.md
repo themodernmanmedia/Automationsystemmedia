@@ -55,8 +55,14 @@ until they come back.
 
 *~1 hour. Needs no platform credentials at all.*
 
-**Prerequisites:** Node 22+, pnpm 10+, PostgreSQL 16, Redis, and FFmpeg built
-with `libx264` and `aac`.
+**The short route:** open the repository on GitHub → **Code ▾ → Codespaces →
+Create codespace**. Everything below is done for you, including generating real
+secrets and migrating the database, and you can skip to the checkpoint. Note
+what a Codespace is *not* for: it sleeps when idle, and Instagram and TikTok
+posts are self-timed by this worker, so it cannot be where the system lives.
+
+**The local route — prerequisites:** Node 22+, pnpm 10+, PostgreSQL 16, Redis,
+and FFmpeg built with `libx264` and `aac`.
 
 ```bash
 ffmpeg -encoders | grep -E 'libx264|aac'   # must return matches

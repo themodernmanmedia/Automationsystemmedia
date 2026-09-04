@@ -1,0 +1,50 @@
+# Postgres and Redis run as real services beside the workspace, at the versions
+# CI uses, so a Codespace behaves the same way a laptop does.
+#
+# DATABASE_URL and REDIS_URL are deliberately NOT set here. A real environment
+# variable wins over `.env`, so setting them in the container would silently
+# override the file the setup documents and make it confusing to change them.
+# post-create.sh writes them into `.env` instead.
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ../..:/workspaces:cached
+    command: sleep infinity
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mmos
+      POSTGRES_PASSWORD: mmos
+      POSTGRES_DB: mmos
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U mmos']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  pgdata:
+  redisdata:
