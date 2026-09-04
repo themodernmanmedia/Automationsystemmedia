@@ -11,7 +11,7 @@
  */
 import { execFile } from 'node:child_process';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { AppError, ProviderNotConfiguredError, type Logger } from '@mmos/core';
@@ -94,7 +94,7 @@ export class ReelCompositor {
     const width = input.width ?? 1080;
     const height = input.height ?? 1920;
     const fps = input.fps ?? 30;
-    const jobDir = join(this.options.workDir, randomUUID());
+    const jobDir = resolve(this.options.workDir, randomUUID());
     await mkdir(jobDir, { recursive: true });
 
     try {
@@ -161,6 +161,70 @@ export class ReelCompositor {
         cause: err,
       });
     }
+  }
+
+  /**
+   * Actual duration of a media file, in seconds.
+   *
+   * This exists because generated speech never matches the script's estimated
+   * beat timing. Rendering visuals to the script's guess would drift out of
+   * sync with the narration; measuring the real audio and cutting the visuals
+   * to it keeps them locked together.
+   */
+  async probeDurationSec(filePath: string): Promise<number> {
+    try {
+      const { stdout } = await exec(this.options.ffprobePath, [
+        '-v', 'error',
+        '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        filePath,
+      ]);
+      const seconds = Number.parseFloat(stdout.trim());
+      if (!Number.isFinite(seconds)) throw new Error(`ffprobe returned "${stdout.trim()}"`);
+      return seconds;
+    } catch (err) {
+      throw new AppError(`Could not read duration of ${filePath}: ${(err as Error).message}`, {
+        code: 'MEDIA_ERROR',
+        retryable: false,
+      });
+    }
+  }
+
+  /**
+   * Joins per-beat narration into one continuous voiceover track.
+   *
+   * Re-encoding rather than stream-copying: the clips come from a TTS provider
+   * and may differ in sample rate or channel layout, which the concat demuxer
+   * would silently turn into garbled audio.
+   */
+  async concatAudio(audioPaths: string[], outputPath: string): Promise<number> {
+    if (audioPaths.length === 0) throw new AppError('No audio to concatenate', { code: 'MEDIA_ERROR' });
+
+    if (audioPaths.length === 1 && audioPaths[0]) {
+      await this.#run(['-y', '-i', audioPaths[0], '-c:a', 'aac', '-b:a', '192k', outputPath]);
+      return this.probeDurationSec(outputPath);
+    }
+
+    const inputs = audioPaths.flatMap((p) => ['-i', p]);
+    const filter = `${audioPaths.map((_, i) => `[${i}:a]`).join('')}concat=n=${audioPaths.length}:v=0:a=1[out]`;
+    await this.#run([
+      '-y', ...inputs,
+      '-filter_complex', filter,
+      '-map', '[out]',
+      '-c:a', 'aac', '-b:a', '192k',
+      outputPath,
+    ]);
+    return this.probeDurationSec(outputPath);
+  }
+
+  /** Pulls a still for the post thumbnail. Taken shortly in, not at 0s, since
+   *  the very first frame is often mid-fade or otherwise unrepresentative. */
+  async extractThumbnail(videoPath: string, outputPath: string, atSec = 1): Promise<void> {
+    await this.#run([
+      '-y', '-ss', String(atSec), '-i', videoPath,
+      '-frames:v', '1', '-q:v', '3',
+      outputPath,
+    ]);
   }
 
   /** Renders one beat: a still (or solid background) with optional caption text. */

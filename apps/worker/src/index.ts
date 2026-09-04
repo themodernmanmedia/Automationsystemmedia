@@ -9,12 +9,14 @@ import { Worker } from 'bullmq';
 import { getConfig, createLogger, ForbiddenError, type Logger } from '@mmos/core';
 import { prisma, TokenStore, disconnect } from '@mmos/db';
 import { AdapterRegistry } from '@mmos/platforms';
-import { AiOrchestrator, createLlmProvider, createSearchProviders, type LlmProvider, type SearchProvider } from '@mmos/ai';
+import { AiOrchestrator, createLlmProvider, createSearchProviders, createVoiceProvider, createImageProvider, type ImageProvider, type LlmProvider, type SearchProvider, type VoiceProvider } from '@mmos/ai';
 import { AnalyticsService, AutomationService, DbCostSink, PublishingService, assessQueueHealth } from '@mmos/engine';
 import { QUEUE_NAMES, QueueRegistry } from './queues.js';
 import { createPublishingWorker, reconcileScheduledJobs, refreshExpiringTokens } from './jobs/publishing.js';
 import { runResearch, runTopicScoring, runTrendScan, type PipelineDeps } from './jobs/pipeline.js';
 import { generateFromTopic } from './jobs/generation.js';
+import { renderPendingReels } from './jobs/reel-render.js';
+import { ReelCompositor } from '@mmos/media';
 import { S3StorageProvider, type StorageProvider } from '@mmos/ai';
 import { distributePostTimes } from '@mmos/engine';
 
@@ -60,6 +62,31 @@ try {
 } catch (err) {
   logger.warn({ err }, 'object storage is not configured; rendered media cannot be published');
 }
+
+// Reels need a voice provider. Without one they are written but cannot be
+// rendered, and the render job says so rather than emitting a silent video.
+let voice: VoiceProvider | null = null;
+try {
+  voice = createVoiceProvider(config);
+} catch (err) {
+  logger.warn({ err }, 'no voice provider configured; Reels cannot be rendered');
+}
+
+// Optional. Without it, beats render on the brand background, which is a
+// legitimate editorial look rather than a degraded one.
+let image: ImageProvider | null = null;
+try {
+  image = createImageProvider(config);
+} catch {
+  logger.info('no image provider configured; reel beats will use the brand background');
+}
+
+const compositor = new ReelCompositor({
+  ffmpegPath: config.FFMPEG_PATH,
+  ffprobePath: config.FFPROBE_PATH,
+  workDir: config.RENDER_WORK_DIR,
+  logger,
+});
 
 function pipelineDeps(organizationId: string): PipelineDeps {
   if (!llm) throw new Error('No LLM provider configured');
@@ -239,6 +266,20 @@ async function main(): Promise<void> {
         case 'tick':
           await forEachOrganization('autonomous-tick', autonomousTick);
           return;
+        case 'render':
+          await forEachOrganization('reel-render', async (organizationId) => {
+            await automation.assertMayRun(organizationId, 'reelProducer');
+            const result = await renderPendingReels({
+              organizationId, voice, image, storage, compositor, logger,
+              recordCost: async (entry) => {
+                await new DbCostSink(organizationId).record({ ...entry, provider: entry.provider });
+              },
+            });
+            if (result.rendered > 0 || result.failed > 0) {
+              logger.info({ organizationId, ...result }, 'reel render pass complete');
+            }
+          });
+          return;
         case 'analytics':
           await forEachOrganization('analytics', async (organizationId) => {
             await automation.assertMayRun(organizationId, 'analytics');
@@ -275,6 +316,7 @@ async function main(): Promise<void> {
   // frequent analytics, daily snapshots.
   const loopQueue = queues.get(QUEUE_NAMES.autonomousLoop);
   await loopQueue.add('tick', {}, { repeat: { pattern: '*/15 * * * *' }, jobId: 'repeat:tick' });
+  await loopQueue.add('render', {}, { repeat: { pattern: '*/10 * * * *' }, jobId: 'repeat:render' });
   await loopQueue.add('analytics', {}, { repeat: { pattern: '0 */2 * * *' }, jobId: 'repeat:analytics' });
   await loopQueue.add('snapshot', {}, { repeat: { pattern: '0 3 * * *' }, jobId: 'repeat:snapshot' });
   await loopQueue.add('tokens', {}, { repeat: { pattern: '0 * * * *' }, jobId: 'repeat:tokens' });
