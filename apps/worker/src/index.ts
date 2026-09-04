@@ -5,8 +5,10 @@
  * Every scheduled task begins by checking the kill switch, so stopping the
  * system stops it everywhere and not just at the API.
  */
+// Must precede every other import — see apps/api/src/server.ts.
+import '@mmos/core/env';
 import { Worker } from 'bullmq';
-import { getConfig, createLogger, ForbiddenError, type Logger } from '@mmos/core';
+import { getConfig, createLogger, ForbiddenError } from '@mmos/core';
 import { prisma, TokenStore, disconnect } from '@mmos/db';
 import { AdapterRegistry } from '@mmos/platforms';
 import { AiOrchestrator, createLlmProvider, createSearchProviders, createVoiceProvider, createImageProvider, createStockProviders, type ImageProvider, type LlmProvider, type SearchProvider, type StockImageProvider, type VoiceProvider } from '@mmos/ai';
@@ -45,7 +47,7 @@ try {
   logger.warn({ err }, 'no LLM provider configured; content generation is disabled');
 }
 try {
-  searchProviders = createSearchProviders(config);
+  searchProviders = createSearchProviders(config, logger);
 } catch (err) {
   logger.warn({ err }, 'no research provider configured; trend discovery is disabled');
 }
@@ -123,8 +125,8 @@ function pipelineDeps(organizationId: string): PipelineDeps {
  * short. The brief is explicit that more content does not mean better growth,
  * so producing to a quota would be the wrong design.
  */
-async function autonomousTick(organizationId: string): Promise<void> {
-  const log = logger.child({ organizationId, loop: 'autonomous' });
+async function autonomousTick(organizationId: string, manual = false): Promise<void> {
+  const log = logger.child({ organizationId, loop: 'autonomous', trigger: manual ? 'manual' : 'scheduled' });
 
   let state;
   try {
@@ -137,7 +139,14 @@ async function autonomousTick(organizationId: string): Promise<void> {
     throw err;
   }
 
-  if (!state.autonomousMode) {
+  // A manual run proceeds with autonomous mode off, because that is the only
+  // state it is useful in: the advice is to inspect what the system produces
+  // before trusting it to run unattended, and requiring autonomous mode first
+  // would make that impossible. The kill switch and the cost limits still
+  // apply — those are enforced by assertMayRun above, and they outrank a
+  // button. Generation stops at APPROVED either way; nothing is published by a
+  // tick.
+  if (!state.autonomousMode && !manual) {
     log.debug('autonomous mode is off; nothing to do');
     return;
   }
@@ -150,7 +159,13 @@ async function autonomousTick(organizationId: string): Promise<void> {
   log.info({ health }, 'queue health');
 
   if (!llm || searchProviders.length === 0) {
-    log.warn('autonomous mode is on but generation providers are unavailable; skipping generation');
+    // Say which one is missing. "Providers are unavailable" sends an operator
+    // hunting through config for something the process already knows.
+    const missing = [
+      ...(llm ? [] : ['an LLM provider (ANTHROPIC_API_KEY or OPENAI_API_KEY)']),
+      ...(searchProviders.length > 0 ? [] : ['a source of topics (RSS_FEEDS, BRAVE_SEARCH_API_KEY or TAVILY_API_KEY)']),
+    ];
+    log.warn({ missing }, 'cannot generate: required providers are not configured');
     return;
   }
 
@@ -158,8 +173,15 @@ async function autonomousTick(organizationId: string): Promise<void> {
 
   // Scan hourly regardless of queue depth: a breaking story is worth knowing
   // about even when the backlog is full, since it may displace weaker content.
+  //
+  // A manual run ignores the hourly throttle. The throttle exists to stop the
+  // scheduled loop hammering feeds, but a human pressing Run now has already
+  // decided; leaving it in place meant a second press within the hour did
+  // nothing and said nothing, which is the behaviour the button exists to
+  // avoid.
   const lastScan = state.lastTrendScanAt?.getTime() ?? 0;
-  if (Date.now() - lastScan > 3_600_000) {
+  const sinceScanMs = Date.now() - lastScan;
+  if (manual || sinceScanMs > 3_600_000) {
     try {
       const found = await runTrendScan(deps);
       await prisma.automationState.update({
@@ -170,6 +192,11 @@ async function autonomousTick(organizationId: string): Promise<void> {
     } catch (err) {
       log.error({ err }, 'trend scan failed');
     }
+  } else {
+    log.info(
+      { minutesUntilNextScan: Math.ceil((3_600_000 - sinceScanMs) / 60_000) },
+      'trend scan skipped: scanned within the last hour',
+    );
   }
 
   try {
@@ -189,6 +216,18 @@ async function autonomousTick(organizationId: string): Promise<void> {
       orderBy: { compositeScore: 'desc' },
       take: wanted,
     });
+    if (selected.length === 0) {
+      // Distinguish "nothing passed scoring" from "nothing was found", since
+      // the two have completely different fixes.
+      const [candidates, rejected] = await Promise.all([
+        prisma.topic.count({ where: { organizationId, status: 'DISCOVERED' } }),
+        prisma.topic.count({ where: { organizationId, status: 'REJECTED' } }),
+      ]);
+      log.info(
+        { wanted, awaitingScoring: candidates, rejected },
+        'no topics are ready to research',
+      );
+    }
 
     for (const topic of selected) {
       try {
@@ -249,6 +288,15 @@ async function autonomousTick(organizationId: string): Promise<void> {
     where: { organizationId },
     data: { lastGenerationAt: new Date() },
   });
+
+  // Always close with a line. A tick that legitimately had nothing to do is
+  // indistinguishable from one that silently failed unless it says so, and
+  // "I pressed Run and nothing happened" is the worst thing an operator can
+  // be left with.
+  log.info(
+    { generated: health.shouldGenerate, queueStatus: health.status, hoursOfContent: health.hoursOfContent },
+    health.shouldGenerate ? 'tick complete' : 'tick complete: queue is deep enough, nothing generated',
+  );
 }
 
 /** Runs a task for every organization, isolating failures to one tenant. */
@@ -287,7 +335,13 @@ async function main(): Promise<void> {
 
       switch (job.name) {
         case 'tick':
-          await forEachOrganization('autonomous-tick', autonomousTick, only);
+          // `only` is set exactly when a human triggered this from the
+          // dashboard, so it also tells us the run is manual.
+          await forEachOrganization(
+            'autonomous-tick',
+            (organizationId) => autonomousTick(organizationId, only !== undefined),
+            only,
+          );
           return;
         case 'render':
           await forEachOrganization('reel-render', async (organizationId) => {

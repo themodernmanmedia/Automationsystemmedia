@@ -64,6 +64,10 @@ export class TopicScorerAgent extends Agent<
             ],
             maxTokens: 1500,
             temperature: 0.3, // scoring should be stable, not creative
+            // One call per candidate topic, so this is the highest-volume
+            // call in the system. Scoring against fixed criteria is the kind
+            // of judgement the fast model makes just as consistently.
+            tier: 'fast',
           },
           topicScoreSchema,
           'TopicScore',

@@ -12,6 +12,35 @@ Check `GET /api/health` → `integrations`. Then in order:
 4. **Budget exceeded.** `GET /api/cost`. The budget gate refuses to dispatch
    before spending, so generation stops cleanly rather than overrunning.
 5. **No research provider.** Set `RSS_FEEDS` — it needs no API key.
+6. **The feeds are failing.** A feed that returns 403 or has a typo'd URL is
+   named in the worker log with its status, alongside `some RSS feeds could not
+   be read`. The trend hunter then legitimately has nothing to work from.
+
+Press **Run now → tick** on the Automation page and read the worker log. A
+manual run ignores the hourly trend-scan throttle and always ends with a `tick
+complete` line, so it will say what it did or why it had nothing to do.
+
+## "Environment variable not found: DATABASE_URL"
+
+The `.env` belongs at the **repository root**, not inside `packages/db` or
+`apps/api`. Every entry point walks up to the workspace root to find it. If the
+variable is set in the real environment, that value wins over the file — check
+for a stale export shadowing what you edited.
+
+## Queue tests fail intermittently
+
+Stop the worker before running the suite. The queue tests assert on what is
+waiting in Redis, and a running worker consumes those jobs mid-assertion. The
+symptom is a job count off by one in `packages/engine/src/queues.test.ts`, and
+it is not a flake in the code under test.
+
+## `pnpm test` refuses to run
+
+The API suite truncates every table, so the suite will not run against a
+database whose name does not contain `test`. Create a disposable one and point
+`.env.test` at it — see the Testing section of the README. This is a guard, not
+a bug: without it, running the tests after filling in `.env` would destroy the
+development database.
 
 ## "This instance is already initialized"
 

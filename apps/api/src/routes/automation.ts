@@ -170,12 +170,25 @@ export async function automationRoutes(app: FastifyInstance, ctx: AppContext): P
       });
     }
 
-    if (job === 'tick' && !ctx.integrations.llm) {
-      return reply.code(422).send({
-        error: 'NotConfigured',
-        code: 'PROVIDER_NOT_CONFIGURED',
-        message: ctx.integrationErrors['llm'] ?? 'No LLM provider is configured.',
-      });
+    // Refuse a run that provably cannot do anything, and say which piece is
+    // missing. Queuing it would "succeed" and then do nothing, which is the
+    // most confusing outcome available.
+    if (job === 'tick') {
+      const missing: string[] = [];
+      if (!ctx.integrations.llm) missing.push(ctx.integrationErrors['llm'] ?? 'No LLM provider is configured.');
+      if (!ctx.integrations.search) {
+        missing.push(
+          ctx.integrationErrors['search'] ??
+            'No source of topics is configured. Set RSS_FEEDS (no API key required), BRAVE_SEARCH_API_KEY or TAVILY_API_KEY.',
+        );
+      }
+      if (missing.length > 0) {
+        return reply.code(422).send({
+          error: 'NotConfigured',
+          code: 'PROVIDER_NOT_CONFIGURED',
+          message: missing.join(' '),
+        });
+      }
     }
 
     const queued = await ctx.queues.get(QUEUE_NAMES.autonomousLoop).add(

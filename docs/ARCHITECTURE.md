@@ -143,6 +143,25 @@ deliberately the simplest code path in the system — a stop control that depend
 subtle logic is not a stop control. `PAUSE ALL`, `STOP PUBLISHING`, `DISABLE AGENT`,
 `CLEAR QUEUE` and `DISCONNECT ACCOUNT` are separate, independently effective controls.
 
+## Model tiers
+
+Two tiers, not one model. The default is the strongest model available, because
+almost every call either writes text that will be published under the brand's
+name or decides whether something is safe to publish — neither is worth
+economising on, and a weaker model shows up as blander hooks and softer safety
+judgements rather than as an error.
+
+The `fast` tier is used for exactly two things: trend scanning, which ranks a
+large batch of headlines, and topic scoring, which runs once per candidate
+topic and is the highest-volume call in the system. Both are classification
+against fixed criteria rather than writing, and running the strongest model
+over every candidate would multiply cost without changing which topics win.
+
+A tier is a request property (`tier: 'fast'`), resolved by the provider against
+`ANTHROPIC_MODEL` / `ANTHROPIC_FAST_MODEL` (or the OpenAI pair). An explicit
+`model` overrides it. Setting only the primary model makes everything use that
+one, so nobody ends up with a second model they did not choose.
+
 ## 11. Honest limits
 
 Collected in `docs/API_LIMITATIONS.md`. Summary: TikTok posts are private until your

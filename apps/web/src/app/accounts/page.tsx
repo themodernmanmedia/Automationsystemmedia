@@ -52,7 +52,6 @@ export default async function AccountsPage() {
                 <div className="flex flex-wrap items-start justify-between gap-4 border-b border-ink-border px-5 py-4">
                   <div className="flex items-center gap-4">
                     {account.profileImageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={account.profileImageUrl} alt="" className="h-11 w-11 rounded-full object-cover" />
                     ) : (
                       <div className="flex h-11 w-11 items-center justify-center rounded-full bg-ink-raised font-display text-sm text-bone-dim">

@@ -5,6 +5,8 @@
  * showing invented numbers would violate the core rule of this project — you
  * must be able to trust what it says.
  */
+// Must precede the client import, which reads DATABASE_URL as it loads.
+import '@mmos/core/env';
 import { DEFAULT_BRAND, DEFAULT_CONTENT_MIX, DEFAULT_SCORING_WEIGHTS, BRAND_COLORS } from '@mmos/core';
 import { prisma } from './client.js';
 

@@ -8,7 +8,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import nock from 'nock';
 import { TikTokAdapter } from './adapter.js';
-import { CapabilityNotSupportedError, ValidationError } from '@mmos/core';
+import { CapabilityNotSupportedError } from '@mmos/core';
 import type { AdapterContext, CreatePostInput } from '../types.js';
 
 const API = 'https://open.tiktokapis.com';

@@ -27,7 +27,6 @@ import {
   isDuplicate,
   optimizeCaption,
   runPlatformQa,
-  similarity,
   SIMILARITY_THRESHOLDS,
   type AgentContext,
   type CheckedClaim,
@@ -168,7 +167,6 @@ export async function generateFromTopic(
   // the piece id, so a regenerated piece stays in the same arm.
   const assignment = await assignToExperiment(deps.organizationId, piece.id, deps.logger);
 
-  const attribution = { operation: 'generation', topicId, contentPieceId: piece.id };
   log.info(
     { contentPieceId: piece.id, format, experimentArm: assignment?.variant ?? null },
     'generating content',

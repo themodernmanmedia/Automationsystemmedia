@@ -5,16 +5,21 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
-    "build": "prisma generate && tsc -p tsconfig.json",
+    "build": "node scripts/with-env.mjs generate && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "generate": "prisma generate",
-    "migrate": "prisma migrate deploy",
-    "migrate:dev": "prisma migrate dev",
-    "push": "prisma db push",
+    "generate": "node scripts/with-env.mjs generate",
+    "migrate": "node scripts/with-env.mjs migrate deploy",
+    "migrate:dev": "node scripts/with-env.mjs migrate dev",
+    "push": "node scripts/with-env.mjs db push",
     "seed": "tsx src/seed.ts",
-    "studio": "prisma studio"
+    "studio": "node scripts/with-env.mjs studio"
   },
   "dependencies": {
     "@mmos/core": "workspace:*",

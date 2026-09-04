@@ -16,10 +16,32 @@ const TEST_ENV = {
   ...process.env,
   NODE_ENV: 'test',
   LOG_LEVEL: 'silent',
-  DATABASE_URL: process.env['DATABASE_URL'] ?? 'postgresql://mmos:mmos@localhost:5432/mmos?schema=public',
+  DATABASE_URL: process.env['DATABASE_URL'] ?? 'postgresql://mmos:mmos@localhost:5432/mmos_test?schema=public',
   REDIS_URL: 'redis://localhost:6379',
   ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
   SESSION_SECRET: Buffer.alloc(32, 9).toString('base64'),
+  // Every provider credential is cleared, not inherited. Several assertions
+  // here are about how the API behaves when an integration is ABSENT, and a
+  // developer with a filled-in `.env` would otherwise silently invert them —
+  // the suite would pass on CI and fail on their machine, or worse, the
+  // reverse.
+  ANTHROPIC_API_KEY: undefined,
+  OPENAI_API_KEY: undefined,
+  ELEVENLABS_API_KEY: undefined,
+  STABILITY_API_KEY: undefined,
+  UNSPLASH_ACCESS_KEY: undefined,
+  PEXELS_API_KEY: undefined,
+  BRAVE_SEARCH_API_KEY: undefined,
+  TAVILY_API_KEY: undefined,
+  NEWSAPI_KEY: undefined,
+  RSS_FEEDS: undefined,
+  META_APP_ID: undefined,
+  META_APP_SECRET: undefined,
+  TIKTOK_CLIENT_KEY: undefined,
+  TIKTOK_CLIENT_SECRET: undefined,
+  S3_BUCKET: undefined,
+  S3_ACCESS_KEY_ID: undefined,
+  S3_SECRET_ACCESS_KEY: undefined,
 };
 
 let app: FastifyInstance;

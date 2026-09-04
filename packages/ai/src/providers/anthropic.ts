@@ -31,14 +31,22 @@ interface AnthropicResponse {
 export class AnthropicProvider implements LlmProvider {
   readonly name = 'anthropic';
   readonly defaultModel: string;
+  readonly fastModel: string;
   readonly #apiKey: string;
   readonly #baseUrl: string;
 
-  constructor(config: { apiKey?: string; model?: string; baseUrl?: string }) {
+  constructor(config: { apiKey?: string; model?: string; fastModel?: string; baseUrl?: string }) {
     if (!config.apiKey) throw new ProviderNotConfiguredError('Anthropic LLM', ['ANTHROPIC_API_KEY']);
     this.#apiKey = config.apiKey;
-    this.defaultModel = config.model ?? 'claude-sonnet-5';
+    this.defaultModel = config.model ?? 'claude-opus-5';
+    this.fastModel = config.fastModel ?? config.model ?? 'claude-sonnet-5';
     this.#baseUrl = config.baseUrl ?? API_URL;
+  }
+
+  /** An explicit model wins; otherwise the tier decides, defaulting to quality. */
+  resolveModel(request: Pick<LlmRequest, 'model' | 'tier'>): string {
+    if (request.model) return request.model;
+    return request.tier === 'fast' ? this.fastModel : this.defaultModel;
   }
 
   estimateCost(inputTokens: number, outputTokens: number, model?: string): number {
@@ -47,7 +55,7 @@ export class AnthropicProvider implements LlmProvider {
   }
 
   async complete(request: LlmRequest): Promise<LlmResponse> {
-    const model = request.model ?? this.defaultModel;
+    const model = this.resolveModel(request);
 
     const body = await withRetry(
       async () => {

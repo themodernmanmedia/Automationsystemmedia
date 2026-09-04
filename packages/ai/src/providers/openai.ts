@@ -25,14 +25,22 @@ interface OpenAiResponse {
 export class OpenAiProvider implements LlmProvider {
   readonly name = 'openai';
   readonly defaultModel: string;
+  readonly fastModel: string;
   readonly #apiKey: string;
   readonly #baseUrl: string;
 
-  constructor(config: { apiKey?: string; model?: string; baseUrl?: string }) {
+  constructor(config: { apiKey?: string; model?: string; fastModel?: string; baseUrl?: string }) {
     if (!config.apiKey) throw new ProviderNotConfiguredError('OpenAI LLM', ['OPENAI_API_KEY']);
     this.#apiKey = config.apiKey;
     this.defaultModel = config.model ?? 'gpt-4o';
+    this.fastModel = config.fastModel ?? config.model ?? 'gpt-4o-mini';
     this.#baseUrl = config.baseUrl ?? API_URL;
+  }
+
+  /** An explicit model wins; otherwise the tier decides, defaulting to quality. */
+  resolveModel(request: Pick<LlmRequest, 'model' | 'tier'>): string {
+    if (request.model) return request.model;
+    return request.tier === 'fast' ? this.fastModel : this.defaultModel;
   }
 
   estimateCost(inputTokens: number, outputTokens: number, model?: string): number {
@@ -41,7 +49,7 @@ export class OpenAiProvider implements LlmProvider {
   }
 
   async #call(request: LlmRequest, jsonMode: boolean): Promise<LlmResponse> {
-    const model = request.model ?? this.defaultModel;
+    const model = this.resolveModel(request);
     const messages = [
       ...(request.system ? [{ role: 'system' as const, content: request.system }] : []),
       ...request.messages,

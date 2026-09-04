@@ -13,13 +13,21 @@ import { AnthropicProvider } from './providers/anthropic.js';
 import { OpenAiProvider } from './providers/openai.js';
 import { OpenAiImageProvider } from './providers/openai-image.js';
 import { ElevenLabsVoiceProvider, OpenAiVoiceProvider } from './providers/voice.js';
-import { BraveSearchProvider, TavilySearchProvider, RssSearchProvider } from './providers/search.js';
+import { BraveSearchProvider, TavilySearchProvider, RssSearchProvider, type FeedLogger } from './providers/search.js';
 
 export function createLlmProvider(config: Config): LlmProvider {
   if (config.LLM_PROVIDER === 'openai') {
-    return new OpenAiProvider({ apiKey: config.OPENAI_API_KEY, model: config.OPENAI_MODEL });
+    return new OpenAiProvider({
+      apiKey: config.OPENAI_API_KEY,
+      model: config.OPENAI_MODEL,
+      fastModel: config.OPENAI_FAST_MODEL,
+    });
   }
-  return new AnthropicProvider({ apiKey: config.ANTHROPIC_API_KEY, model: config.ANTHROPIC_MODEL });
+  return new AnthropicProvider({
+    apiKey: config.ANTHROPIC_API_KEY,
+    model: config.ANTHROPIC_MODEL,
+    fastModel: config.ANTHROPIC_FAST_MODEL,
+  });
 }
 
 export function createImageProvider(config: Config): ImageProvider {
@@ -54,7 +62,7 @@ export function createVoiceProvider(config: Config): VoiceProvider {
  * RSS needs no API key, so trend discovery works out of the box. It is used
  * alongside a keyed provider when one is configured, and alone when not.
  */
-export function createSearchProviders(config: Config): SearchProvider[] {
+export function createSearchProviders(config: Config, logger?: FeedLogger): SearchProvider[] {
   const providers: SearchProvider[] = [];
   if (config.SEARCH_PROVIDER === 'brave' && config.BRAVE_SEARCH_API_KEY) {
     providers.push(new BraveSearchProvider({ apiKey: config.BRAVE_SEARCH_API_KEY }));
@@ -63,7 +71,7 @@ export function createSearchProviders(config: Config): SearchProvider[] {
     providers.push(new TavilySearchProvider({ apiKey: config.TAVILY_API_KEY }));
   }
   if (config.RSS_FEEDS.length > 0) {
-    providers.push(new RssSearchProvider({ feeds: config.RSS_FEEDS }));
+    providers.push(new RssSearchProvider({ feeds: config.RSS_FEEDS, ...(logger ? { logger } : {}) }));
   }
   if (providers.length === 0) {
     throw new ProviderNotConfiguredError('Search/trend', [

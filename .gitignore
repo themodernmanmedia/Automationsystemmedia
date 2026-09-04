@@ -7,6 +7,7 @@ coverage/
 *.tsbuildinfo
 .env
 .env.local
+.env.test
 .env.*.local
 !.env.example
 .DS_Store
@@ -20,3 +21,6 @@ packages/db/.env
 
 # Safety net: stray render job directories if RENDER_WORK_DIR is misconfigured
 /[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-*/
+
+# Redis persistence file, if redis-server is started from the repo root.
+dump.rdb

@@ -76,6 +76,10 @@ export class TrendHunterAgent extends Agent<TrendHunterInput, DiscoveredTopicRec
         messages: [{ role: 'user', content: PROMPTS.TREND_HUNTER.user(rendered) }],
         maxTokens: 6000,
         temperature: 0.6,
+        // A ranking pass over a large batch of headlines: the job is to pick
+        // which are worth pursuing, not to write anything, and it runs on
+        // every scan. The strongest model is spent on what gets published.
+        tier: 'fast',
       },
       trendOutputSchema,
       'DiscoveredTopics',

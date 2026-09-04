@@ -1,6 +1,10 @@
 /**
  * API server.
  */
+// Must precede every other import: `@mmos/db` builds its Prisma client at
+// import time and reads DATABASE_URL there, so the root .env has to be in
+// process.env before that module is evaluated.
+import '@mmos/core/env';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';

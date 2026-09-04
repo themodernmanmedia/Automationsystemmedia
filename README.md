@@ -94,13 +94,28 @@ Registration is single-use: it creates the one organization and its `OWNER`, and
 is closed afterwards. Seeding before that point exits with an error telling you
 so, because a brand has to belong to an organization.
 
+The `.env` lives at the repository root and is loaded by all three processes,
+the Prisma CLI and the test suite. A real environment variable always wins over
+it, so a deployment that injects configuration is unaffected by a file left in
+the checkout.
+
 Minimum to boot: Postgres, Redis, `ENCRYPTION_KEY`, `SESSION_SECRET`, and one
-LLM API key. Platform credentials and S3 are needed to actually publish; the
+LLM API key. Add `RSS_FEEDS` (no API key needed) to give it something to
+research. Platform credentials and S3 are needed to actually publish; the
 dashboard reports precisely which integrations are configured and which are not.
 
 ## Testing
 
+The suite exercises real Postgres and Redis, and the API tests truncate every
+table (registration is single-use, so they have to start from zero
+organizations). It therefore refuses to run against a database whose name does
+not say `test`, rather than risk destroying a development dataset:
+
 ```bash
+createdb mmos_test
+echo 'DATABASE_URL=postgresql://mmos:mmos@localhost:5432/mmos_test?schema=public' > .env.test
+DATABASE_URL=postgresql://mmos:mmos@localhost:5432/mmos_test?schema=public pnpm db:migrate
+
 pnpm test
 ```
 

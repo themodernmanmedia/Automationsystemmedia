@@ -1,15 +1,43 @@
 /**
  * Global test setup.
  *
- * Two jobs:
- *  1. Guarantee no test can reach a real social platform. The brief is explicit
+ * Three jobs:
+ *  1. Put the root `.env` into `process.env`, so the suites that exercise real
+ *     Postgres and Redis find DATABASE_URL and REDIS_URL. Vitest runs from the
+ *     repository root but nothing else loads the file, and CI sets these
+ *     directly — which a real environment variable winning keeps intact.
+ *  2. Guarantee no test can reach a real social platform. The brief is explicit
  *     that production accounts must never be used in tests, so this is enforced
  *     mechanically rather than by convention.
- *  2. Neutralize any ambient HTTP proxy, which would otherwise intercept
+ *  3. Neutralize any ambient HTTP proxy, which would otherwise intercept
  *     requests before nock ever sees them.
  */
 import { afterAll, beforeAll } from 'vitest';
 import nock from 'nock';
+import { loadDotEnv } from '@mmos/core';
+
+// `.env.test` first, so a developer can point the suite at a throwaway
+// database without touching the `.env` the app runs from.
+loadDotEnv(process.cwd(), ['.env.test', '.env']);
+
+/**
+ * Refuse to run against a database that is not obviously disposable.
+ *
+ * The API suite truncates every table — registration is single-use, so it has
+ * to start from zero organizations. Pointed at a development database that is
+ * one destroyed dataset, and `pnpm test` after filling in `.env` is exactly how
+ * someone would find that out. Requiring the name to say `test` costs one line
+ * of configuration and removes the possibility.
+ */
+const databaseUrl = process.env['DATABASE_URL'];
+if (databaseUrl && !/test/i.test(new URL(databaseUrl).pathname)) {
+  throw new Error(
+    `Refusing to run tests against "${new URL(databaseUrl).pathname.slice(1)}": the suite truncates every table.\n` +
+      'Create a disposable database and point the suite at it, e.g.\n' +
+      '  createdb mmos_test\n' +
+      '  echo \'DATABASE_URL=postgresql://mmos:mmos@localhost:5432/mmos_test?schema=public\' > .env.test',
+  );
+}
 
 const PROXY_VARS = [
   'HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy',

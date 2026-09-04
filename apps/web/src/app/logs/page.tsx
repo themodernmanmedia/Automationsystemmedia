@@ -6,7 +6,7 @@ import {
   type AuditLogResponse,
   type PublishingLogResponse,
 } from '@/lib/api';
-import { PageHeader, StatusPill, EmptyState, ErrorPanel } from '@/components/ui';
+import { PageHeader, StatusPill, ErrorPanel } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
 

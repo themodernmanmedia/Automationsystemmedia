@@ -6,7 +6,61 @@
  * ENCRYPTION_KEY discovered during a publish is far more expensive than one
  * discovered during startup.
  */
+import { existsSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
+
+/**
+ * Loads the repository's root `.env` into `process.env`.
+ *
+ * Every entry point calls this before reading config. Without it nothing does:
+ * the apps run from `apps/api`, `apps/worker` and `packages/db`, so a `.env`
+ * at the repository root — which is where the quickstart puts it, and the only
+ * sensible place for one shared by three processes — is never seen, and the
+ * documented setup fails at the first command.
+ *
+ * Two deliberate properties:
+ *
+ * - **A real environment variable always wins.** In production, staging and CI
+ *   the values come from the platform, and a stale `.env` left in a checkout
+ *   must not silently override them. Node's own parser does the reading, so
+ *   quoting and escapes behave as expected, and anything already set is then
+ *   restored over the top.
+ * - **A missing file is not an error.** Deployments that inject configuration
+ *   directly have no `.env`, and refusing to boot without one would be wrong.
+ *   Config validation still fails loudly if the values themselves are absent.
+ */
+export function loadDotEnv(
+  startDir: string = process.cwd(),
+  filenames: readonly string[] = ['.env'],
+): string | undefined {
+  let dir = resolve(startDir);
+  for (;;) {
+    // The workspace root is the boundary: stop there whether or not a file was
+    // found, so a stray `.env` further up the filesystem cannot leak in.
+    const isWorkspaceRoot = existsSync(join(dir, 'pnpm-workspace.yaml'));
+
+    for (const filename of filenames) {
+      const candidate = join(dir, filename);
+      if (!existsSync(candidate)) continue;
+      const preexisting = { ...process.env };
+      try {
+        process.loadEnvFile(candidate);
+      } catch {
+        return undefined; // Unreadable or malformed: config validation reports it.
+      }
+      for (const [key, value] of Object.entries(preexisting)) {
+        if (value !== undefined) process.env[key] = value;
+      }
+      return candidate;
+    }
+
+    if (isWorkspaceRoot) return undefined;
+    const parent = dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
+  }
+}
 
 const PLACEHOLDER_SECRETS = new Set([
   'changeme',
@@ -72,9 +126,15 @@ export const configSchema = z.object({
 
   LLM_PROVIDER: z.enum(['anthropic', 'openai']).default('anthropic'),
   ANTHROPIC_API_KEY: z.string().optional(),
-  ANTHROPIC_MODEL: z.string().default('claude-sonnet-5'),
+  // The strongest model is the default, because nearly every call either
+  // writes something that will be published under the brand's name or decides
+  // whether something is safe to publish. The fast model is used only for the
+  // high-volume ranking passes — see ModelTier in @mmos/ai.
+  ANTHROPIC_MODEL: z.string().default('claude-opus-5'),
+  ANTHROPIC_FAST_MODEL: z.string().default('claude-sonnet-5'),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4o'),
+  OPENAI_FAST_MODEL: z.string().default('gpt-4o-mini'),
 
   IMAGE_PROVIDER: z.enum(['openai', 'stability', 'none']).default('none'),
   VOICE_PROVIDER: z.enum(['elevenlabs', 'openai', 'none']).default('none'),

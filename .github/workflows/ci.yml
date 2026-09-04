@@ -50,6 +50,7 @@ jobs:
       - run: pnpm db:migrate
       - run: pnpm build
       - run: pnpm typecheck
+      - run: pnpm lint
       - run: pnpm test
       - run: pnpm audit --audit-level=high
         continue-on-error: true

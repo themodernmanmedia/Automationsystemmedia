@@ -284,7 +284,10 @@ export class ReelCompositor {
       await exec(this.options.ffmpegPath, args, { maxBuffer: 32 * 1024 * 1024 });
     } catch (err) {
       const stderr = (err as { stderr?: string }).stderr ?? '';
-      throw new Error(`ffmpeg failed: ${stderr.split('\n').slice(-6).join(' ').trim() || (err as Error).message}`);
+      throw new Error(
+        `ffmpeg failed: ${stderr.split('\n').slice(-6).join(' ').trim() || (err as Error).message}`,
+        { cause: err },
+      );
     }
   }
 }

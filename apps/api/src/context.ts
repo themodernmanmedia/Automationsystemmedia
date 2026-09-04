@@ -55,7 +55,7 @@ export function createContext(config: Config = getConfig()): AppContext {
 
   let searchProviders: SearchProvider[] = [];
   try {
-    searchProviders = createSearchProviders(config);
+    searchProviders = createSearchProviders(config, logger);
   } catch (err) {
     integrationErrors['search'] = (err as Error).message;
     logger.warn({ err }, 'no research provider configured; trend discovery is unavailable');

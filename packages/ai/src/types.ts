@@ -12,12 +12,28 @@ export interface LlmMessage {
   content: string;
 }
 
+/**
+ * Which class of model a call needs.
+ *
+ * `quality` is the default and the strongest model available, because most
+ * calls in this system either produce text that will be published under the
+ * brand's name or decide whether something is safe to publish — neither is
+ * worth economising on. `fast` is for the high-volume mechanical passes that
+ * rank and filter, where the work is closer to classification than to writing
+ * and running the strongest model over every candidate would cost far more
+ * without changing the outcome.
+ */
+export type ModelTier = 'quality' | 'fast';
+
 export interface LlmRequest {
   system?: string;
   messages: LlmMessage[];
   maxTokens?: number;
   temperature?: number;
+  /** Pins an exact model, overriding `tier`. Normally left unset. */
   model?: string;
+  /** Defaults to `quality` when unset. */
+  tier?: ModelTier;
   /** Attribution for the cost meter. */
   purpose?: string;
 }

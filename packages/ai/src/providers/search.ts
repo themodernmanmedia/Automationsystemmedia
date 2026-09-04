@@ -100,6 +100,11 @@ export class TavilySearchProvider implements SearchProvider {
   }
 }
 
+/** The subset of the logger this provider needs, so `@mmos/ai` stays standalone. */
+export interface FeedLogger {
+  warn(obj: Record<string, unknown>, msg: string): void;
+}
+
 /**
  * RSS aggregator.
  *
@@ -111,14 +116,27 @@ export class TavilySearchProvider implements SearchProvider {
 export class RssSearchProvider implements SearchProvider {
   readonly name = 'rss';
   readonly #feeds: string[];
+  readonly #logger: FeedLogger | undefined;
 
-  constructor(config: { feeds: string[] }) {
+  constructor(config: { feeds: string[]; logger?: FeedLogger }) {
     this.#feeds = config.feeds;
+    this.#logger = config.logger;
   }
 
   async search(query: string, options: { limit?: number } = {}): Promise<SearchResult[]> {
     const settled = await Promise.allSettled(this.#feeds.map((f) => this.#fetchFeed(f)));
     const items = settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
+
+    // Say which feeds failed and why. A skipped feed used to be indistinguishable
+    // from an empty one, so a typo in RSS_FEEDS, an expired URL or a publisher
+    // returning 403 all surfaced identically as "no items from any source" —
+    // with nothing to act on.
+    const failures = settled.flatMap((r, i) =>
+      r.status === 'rejected' ? [{ feed: this.#feeds[i] ?? '', reason: String((r.reason as Error)?.message ?? r.reason) }] : [],
+    );
+    if (failures.length > 0) {
+      this.#logger?.warn({ failures, feedsTotal: this.#feeds.length }, 'some RSS feeds could not be read');
+    }
 
     // An empty query means "everything recent" — that is the trend-scan case.
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -144,7 +162,9 @@ export class RssSearchProvider implements SearchProvider {
       headers: { 'user-agent': 'ModernManOS/1.0 (+content research)' },
       signal: AbortSignal.timeout(15_000),
     });
-    if (!res.ok) return [];
+    // Throw rather than return empty: `search` collects the rejection and
+    // reports it, so a feed that is failing is visible instead of silent.
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`.trim());
     const xml = await res.text();
 
     const publisher = hostOf(feedUrl);
