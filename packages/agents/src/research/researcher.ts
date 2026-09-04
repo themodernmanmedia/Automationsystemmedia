@@ -114,21 +114,36 @@ export class ResearcherAgent extends Agent<ResearchInput, ResearchResult> {
     );
 
     // Structural guard against fabrication: drop any claim whose supporting
-    // excerpt does not actually appear in the fetched text. The prompt asks for
-    // verbatim quotes; this verifies it rather than trusting it.
-    const corpus = fetched.map((s) => normalize(s.fullText ?? s.excerpt)).join('\n');
+    // excerpt cannot be found in the fetched text. The prompt asks for verbatim
+    // quotes; this verifies it rather than trusting it.
+    const corpus = normalizeForMatching(fetched.map((s) => s.fullText ?? s.excerpt).join('\n'));
     const verified = research.claims.filter((claim) => {
-      const excerpt = normalize(claim.supportingExcerpt);
-      if (excerpt.length < 15) return false;
-      const present = corpus.includes(excerpt.slice(0, 60));
+      const present = excerptAppearsIn(claim.supportingExcerpt, corpus);
       if (!present) {
         this.ctx.logger.warn(
-          { claim: claim.text.slice(0, 120) },
+          { claim: claim.text.slice(0, 120), excerpt: claim.supportingExcerpt.slice(0, 120) },
           'dropping claim: supporting excerpt not found in any fetched source',
         );
       }
       return present;
     });
+
+    // A high drop rate means something systemic — usually sources that failed
+    // to fetch, leaving the model only thin snippets to quote from. Without
+    // this the pipeline would quietly research, spend, and produce nothing.
+    const dropped = research.claims.length - verified.length;
+    if (research.claims.length >= 3 && dropped / research.claims.length > 0.5) {
+      this.ctx.logger.error(
+        {
+          topicId: input.topicId,
+          claimsExtracted: research.claims.length,
+          claimsDropped: dropped,
+          sourcesWithFullText: fetched.filter((s) => s.fullText).length,
+          sourcesTotal: fetched.length,
+        },
+        'most claims failed excerpt verification; check that sources are fetchable',
+      );
+    }
 
     return {
       output: { topicId: input.topicId, research: { ...research, claims: verified }, sources: fetched },
@@ -182,9 +197,52 @@ function canonical(url: string): string {
   return (url.split('?')[0] ?? url).replace(/\/$/, '');
 }
 
-function normalize(text: string): string {
-  return text.toLowerCase().replace(/\s+/g, ' ').trim();
+/**
+ * Normalizes text for quote matching.
+ *
+ * Punctuation is stripped entirely rather than merely lowercased. Models
+ * reliably reproduce the WORDS of a quote but routinely change curly quotes to
+ * straight ones, em-dashes to hyphens, or drop a comma. Matching on punctuation
+ * would reject those as fabrications and, once enough claims are dropped, the
+ * fact gate blocks the piece — so the system would research, spend, and publish
+ * nothing. Words are the signal; punctuation is noise.
+ */
+function normalizeForMatching(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+    .replace(/[\u201C\u201D\u201E]/g, '"')
+    .replace(/[\u2010-\u2015\u2212]/g, '-')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
 }
+
+/** Minimum contiguous words that must match. Long enough that hitting it by
+ *  chance is implausible, short enough to survive a clipped or elided quote. */
+const ANCHOR_WORDS = 8;
+
+/**
+ * True when the excerpt genuinely comes from the corpus.
+ *
+ * Requires a contiguous run of words from the excerpt to appear verbatim in a
+ * source. That still makes invention essentially impossible while tolerating
+ * the punctuation and whitespace drift that real quoting produces.
+ */
+export function excerptAppearsIn(excerpt: string, normalizedCorpus: string): boolean {
+  const words = normalizeForMatching(excerpt).split(' ').filter(Boolean);
+  // Too short to prove anything either way.
+  if (words.length < 5) return false;
+
+  // A short excerpt must match in full; a longer one needs any anchor-length run.
+  if (words.length <= ANCHOR_WORDS) return normalizedCorpus.includes(words.join(' '));
+
+  for (let i = 0; i + ANCHOR_WORDS <= words.length; i++) {
+    if (normalizedCorpus.includes(words.slice(i, i + ANCHOR_WORDS).join(' '))) return true;
+  }
+  return false;
+}
+
+export { normalizeForMatching };
 
 function stripHtml(html: string): string {
   return html
