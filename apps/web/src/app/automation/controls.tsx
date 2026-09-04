@@ -175,12 +175,13 @@ export function AutomationControls({ initial }: { initial: AutomationResponse })
             what the system produces before trusting it to run unattended.
           </p>
         </div>
-        <div className="grid gap-px bg-ink-border sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-px bg-ink-border sm:grid-cols-2 lg:grid-cols-5">
           {[
             { job: 'tick', label: 'Discover & generate', hint: 'Scan trends, score, research, write' },
             { job: 'render', label: 'Render Reels', hint: 'Voice and compose queued Reels' },
             { job: 'analytics', label: 'Collect analytics', hint: 'Pull metrics for published posts' },
             { job: 'snapshot', label: 'Snapshot accounts', hint: 'Record follower counts' },
+            { job: 'learn', label: 'Run learning cycle', hint: 'Adjust strategy from measured performance' },
           ].map((item) => (
             <div key={item.job} className="bg-ink-soft p-5">
               <div className="text-sm font-medium text-bone">{item.label}</div>

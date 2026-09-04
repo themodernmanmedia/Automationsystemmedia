@@ -64,10 +64,12 @@ class MemoryStorage implements StorageProvider {
   }
 }
 
+// The render job supplies its own per-job temp directory, so this only needs
+// to be a real path rather than the process cwd.
 const compositor = new ReelCompositor({
   ffmpegPath: FFMPEG,
   ffprobePath: FFPROBE,
-  workDir: '',
+  workDir: tmpdir(),
   logger,
 });
 

@@ -18,6 +18,7 @@ import { createPublishingWorker, reconcileScheduledJobs, refreshExpiringTokens }
 import { runResearch, runTopicScoring, runTrendScan, type PipelineDeps } from './jobs/pipeline.js';
 import { generateFromTopic } from './jobs/generation.js';
 import { renderPendingReels } from './jobs/reel-render.js';
+import { learnedPostingHours, runLearningCycle } from './jobs/learning.js';
 import { ReelCompositor } from '@mmos/media';
 import { S3StorageProvider, type StorageProvider } from '@mmos/ai';
 
@@ -215,7 +216,10 @@ async function autonomousTick(organizationId: string): Promise<void> {
         // Only approved content is scheduled. Flagged pieces wait for a human
         // in the exception queue rather than going out unattended.
         if (result.status === 'APPROVED' && accounts.length > 0) {
-          const [slot] = distributePostTimes(1, new Date(Date.now() + 3_600_000));
+          // Measured best hours when there is enough evidence; otherwise
+          // distributePostTimes falls back to sensible defaults.
+          const hours = await learnedPostingHours(organizationId);
+          const [slot] = distributePostTimes(1, new Date(Date.now() + 3_600_000), hours);
           await publishing.schedule({
             organizationId,
             contentPieceId: result.contentPieceId,
@@ -288,6 +292,12 @@ async function main(): Promise<void> {
             }
           }, only);
           return;
+        case 'learn':
+          await forEachOrganization('learning', async (organizationId) => {
+            const result = await runLearningCycle({ organizationId, automation, logger });
+            logger.info({ organizationId, ...result }, 'learning cycle finished');
+          }, only);
+          return;
         case 'analytics':
           await forEachOrganization('analytics', async (organizationId) => {
             await automation.assertMayRun(organizationId, 'analytics');
@@ -327,6 +337,7 @@ async function main(): Promise<void> {
   await loopQueue.add('render', {}, { repeat: { pattern: '*/10 * * * *' }, jobId: 'repeat-render' });
   await loopQueue.add('analytics', {}, { repeat: { pattern: '0 */2 * * *' }, jobId: 'repeat-analytics' });
   await loopQueue.add('snapshot', {}, { repeat: { pattern: '0 3 * * *' }, jobId: 'repeat-snapshot' });
+  await loopQueue.add('learn', {}, { repeat: { pattern: '0 4 * * 1' }, jobId: 'repeat-learn' });
   await loopQueue.add('tokens', {}, { repeat: { pattern: '0 * * * *' }, jobId: 'repeat-tokens' });
   await loopQueue.add('reconcile', {}, { repeat: { pattern: '*/30 * * * *' }, jobId: 'repeat-reconcile' });
 

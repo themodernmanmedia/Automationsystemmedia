@@ -1,3 +1,0 @@
-file '/home/user/Automationsystemmedia/f9706f3d-b4c5-4e26-8e71-c35ca5c2185b/clip-0.mp4'
-file '/home/user/Automationsystemmedia/f9706f3d-b4c5-4e26-8e71-c35ca5c2185b/clip-1.mp4'
-file '/home/user/Automationsystemmedia/f9706f3d-b4c5-4e26-8e71-c35ca5c2185b/clip-2.mp4'

@@ -148,7 +148,7 @@ export async function automationRoutes(app: FastifyInstance, ctx: AppContext): P
   app.post('/automation/run/:job', { preHandler: requireAuth('EDITOR') }, async (request, reply) => {
     const { organizationId } = orgScope(request);
     const { job } = z
-      .object({ job: z.enum(['tick', 'render', 'analytics', 'snapshot', 'reconcile']) })
+      .object({ job: z.enum(['tick', 'render', 'analytics', 'snapshot', 'reconcile', 'learn']) })
       .parse(request.params);
 
     if (!ctx.queues) {

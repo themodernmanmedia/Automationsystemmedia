@@ -17,3 +17,6 @@ storage/
 renders/
 next-env.d.ts
 packages/db/.env
+
+# Safety net: stray render job directories if RENDER_WORK_DIR is misconfigured
+/[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-*/

@@ -101,11 +101,16 @@ describe('carousel renderer', () => {
 });
 
 describe('reel compositor', () => {
-  const compositor = new ReelCompositor({
-    ffmpegPath: FFMPEG,
-    ffprobePath: '/usr/bin/ffprobe',
-    workDir: '',
-    logger,
+  // workDir must be a real directory: the compositor creates its job folder
+  // inside it, and an empty value resolves to the process cwd.
+  let compositor: ReelCompositor;
+  beforeAll(() => {
+    compositor = new ReelCompositor({
+      ffmpegPath: FFMPEG,
+      ffprobePath: '/usr/bin/ffprobe',
+      workDir,
+      logger,
+    });
   });
 
   it('verifies the FFmpeg build can actually encode H.264 and AAC', async () => {
@@ -118,7 +123,7 @@ describe('reel compositor', () => {
     const broken = new ReelCompositor({
       ffmpegPath: '/nonexistent/ffmpeg',
       ffprobePath: '/nonexistent/ffprobe',
-      workDir: '',
+      workDir,
       logger,
     });
     await expect(
