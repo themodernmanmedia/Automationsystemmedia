@@ -1,0 +1,146 @@
+# Render blueprint — the browser-only deployment path.
+#
+# Render is chosen here for one specific reason: a blueprint can be deployed
+# entirely from a web page, with no terminal, which is what makes this
+# operable from a phone. Any host that runs three containers against Postgres
+# and Redis works equally well; see docs/DEPLOYMENT.md for the shape.
+#
+# NOTE ON COST, stated plainly: the worker IS the scheduler for Instagram and
+# TikTok, because neither platform accepts a scheduled time. A free instance
+# that sleeps when idle will miss the moment a post is due. The worker must run
+# on a paid instance type. The API and dashboard tolerate sleeping; they only
+# affect you, not your posting schedule.
+
+databases:
+  - name: mmos-postgres
+    databaseName: mmos
+    user: mmos
+    plan: basic-256mb
+
+services:
+  # ------------------------------------------------------------------ redis --
+  - type: keyvalue
+    name: mmos-redis
+    plan: starter
+    ipAllowList: []          # reachable only from inside the Render network
+    maxmemoryPolicy: noeviction   # BullMQ job state must never be evicted
+
+  # -------------------------------------------------------------------- api --
+  - type: web
+    name: mmos-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /api/health
+    # Migrations run before the new version takes traffic, and a failure here
+    # aborts the deploy rather than starting an API against a schema it does
+    # not match.
+    preDeployCommand: pnpm db:migrate
+    dockerCommand: node apps/api/dist/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_PORT
+        value: 4000
+      - key: DATABASE_URL
+        fromDatabase: { name: mmos-postgres, property: connectionString }
+      - key: REDIS_URL
+        fromService: { name: mmos-redis, type: keyvalue, property: connectionString }
+      # Generated once by Render and never shown in this file. Losing
+      # ENCRYPTION_KEY means every connected account must be reconnected, so
+      # back it up from the dashboard after the first deploy.
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      # Left blank on purpose: paste your own in the Render dashboard. A key in
+      # a committed file is a leaked key.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: RSS_FEEDS
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_PUBLIC_BASE_URL
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_REDIRECT_URI
+        sync: false
+      - key: TIKTOK_CLIENT_KEY
+        sync: false
+      - key: TIKTOK_CLIENT_SECRET
+        sync: false
+      - key: TIKTOK_REDIRECT_URI
+        sync: false
+
+  # ----------------------------------------------------------------- worker --
+  # The scheduler. Never put this on a plan that sleeps.
+  - type: worker
+    name: mmos-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: standard
+    dockerCommand: node apps/worker/dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase: { name: mmos-postgres, property: connectionString }
+      - key: REDIS_URL
+        fromService: { name: mmos-redis, type: keyvalue, property: connectionString }
+      # Must be the SAME values as the API: the worker decrypts the tokens the
+      # API stored, and a different key cannot read them.
+      - key: ENCRYPTION_KEY
+        fromService: { name: mmos-api, type: web, envVarKey: ENCRYPTION_KEY }
+      - key: SESSION_SECRET
+        fromService: { name: mmos-api, type: web, envVarKey: SESSION_SECRET }
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: RSS_FEEDS
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_PUBLIC_BASE_URL
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: TIKTOK_CLIENT_KEY
+        sync: false
+      - key: TIKTOK_CLIENT_SECRET
+        sync: false
+
+  # -------------------------------------------------------------- dashboard --
+  - type: web
+    name: mmos-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    dockerCommand: node apps/web/.next/standalone/apps/web/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: HOSTNAME
+        value: 0.0.0.0
+      # The dashboard never talks to a platform directly; everything goes
+      # through the API so credentials stay server-side.
+      - key: API_BASE_URL
+        fromService: { name: mmos-api, type: web, property: hostport }

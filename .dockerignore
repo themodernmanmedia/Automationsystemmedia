@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+**/dist
+**/.next
+.git
+.github
+coverage
+tmp
+.devcontainer
+.env
+.env.*
+!.env.example
+*.log
+dump.rdb

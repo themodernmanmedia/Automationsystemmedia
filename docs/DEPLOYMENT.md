@@ -1,5 +1,30 @@
 # Deployment
 
+## Deploying from a browser (including a phone)
+
+`render.yaml` is a blueprint that stands the whole system up — API, worker,
+dashboard, Postgres and Redis — from a web page, with no terminal involved.
+
+1. <https://dashboard.render.com/blueprints> → **New Blueprint Instance**
+2. Pick this repository and the branch. Render reads `render.yaml`.
+3. It asks for the values marked `sync: false` — at minimum
+   `ANTHROPIC_API_KEY` and `RSS_FEEDS`. Everything else can be filled in later.
+4. Deploy. `ENCRYPTION_KEY` and `SESSION_SECRET` are generated for you.
+   **Back up `ENCRYPTION_KEY` from the dashboard immediately** — it encrypts
+   every platform token, and losing it means reconnecting every account.
+5. Open the `mmos-web` URL, register the first account, then run
+   `pnpm db:seed` once from Render's shell.
+
+Afterwards the dashboard is a normal responsive web app: a phone browser
+operates it fine.
+
+**One thing you cannot economise on.** The worker *is* the scheduler for
+Instagram and TikTok, because neither platform accepts a scheduled time. On an
+instance type that sleeps when idle, a post whose moment arrives while the
+worker is asleep does not go out. The blueprint puts the worker on a
+non-sleeping plan for exactly this reason; the API and dashboard may sleep
+without affecting your posting schedule.
+
 ## Shape
 
 Three processes, one database, one Redis, one bucket:
@@ -52,8 +77,17 @@ node apps/api/dist/server.js
 # worker — the scheduler. Restart on failure.
 node apps/worker/dist/index.js
 
-# web
-node apps/web/.next/standalone/server.js
+# web — note the nested path: outputFileTracingRoot is the workspace root,
+# so Next writes the server under its own package path inside standalone/
+node apps/web/.next/standalone/apps/web/server.js
+```
+
+Next's standalone output excludes static assets and `public/`; they must be
+copied beside the server or every page loads without its CSS. The Dockerfile
+does this — do the same if you deploy without it:
+
+```bash
+cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
 ```
 
 Scale the API horizontally as needed. **Run exactly one worker** unless you

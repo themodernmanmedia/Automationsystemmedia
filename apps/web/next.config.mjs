@@ -36,6 +36,14 @@ loadRootEnv(dirname(fileURLToPath(import.meta.url)));
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Emits apps/web/.next/standalone/server.js — the server DEPLOYMENT.md tells
+  // you to run, and the only way to ship the dashboard without the whole
+  // node_modules tree. Without this the documented production command has no
+  // file to execute.
+  output: 'standalone',
+  // The workspace root, so tracing collects files from packages/* rather than
+  // only apps/web.
+  outputFileTracingRoot: resolve(dirname(fileURLToPath(import.meta.url)), '../..'),
   // The dashboard never talks to platform APIs directly; everything goes
   // through our API so credentials stay server-side.
   async rewrites() {
