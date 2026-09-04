@@ -7,13 +7,17 @@ const SECTIONS = [
   { group: 'Operate', items: [
     { href: '/', label: 'Overview' },
     { href: '/automation', label: 'Automation' },
+    { href: '/calendar', label: 'Calendar' },
     { href: '/content', label: 'Content' },
+    { href: '/topics', label: 'Topics' },
   ]},
   { group: 'Measure', items: [
     { href: '/analytics', label: 'Analytics' },
+    { href: '/logs', label: 'Logs' },
   ]},
   { group: 'Configure', items: [
     { href: '/accounts', label: 'Social Accounts' },
+    { href: '/brand', label: 'Brand' },
     { href: '/capabilities', label: 'Platform Limits' },
   ]},
 ];

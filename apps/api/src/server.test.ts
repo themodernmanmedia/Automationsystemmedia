@@ -443,3 +443,79 @@ describe('retrying failed posts', () => {
     expect(body.skipped[0].reason).toMatch(/Reconnect the account/);
   });
 });
+
+describe('calendar', () => {
+  it('returns jobs in the window with the strategy that decides who waits', async () => {
+    const account = await prisma.socialAccount.findFirst({
+      where: { organizationId, platform: 'INSTAGRAM' },
+    });
+    const piece = await prisma.contentPiece.create({
+      data: {
+        organizationId, format: 'CAROUSEL', status: 'SCHEDULED',
+        category: 'BUSINESS', title: 'Calendar piece', hook: 'hook',
+      },
+    });
+    const soon = new Date(Date.now() + 3 * 3_600_000);
+    await prisma.publishingJob.create({
+      data: {
+        contentPieceId: piece.id, socialAccountId: account!.id, platform: 'INSTAGRAM',
+        status: 'SCHEDULED', scheduledAt: soon, scheduleStrategy: 'SELF_TIMED',
+        idempotencyKey: `cal-${Date.now()}`,
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET', url: '/api/calendar', headers: { cookie: ownerCookie },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const job = res.json().jobs.find(
+      (j: { content?: { title: string } }) => j.content?.title === 'Calendar piece',
+    );
+    expect(job).toBeTruthy();
+    // The dashboard warns which posts depend on the worker being up.
+    expect(job.scheduleStrategy).toBe('SELF_TIMED');
+    expect(job.platform).toBe('INSTAGRAM');
+  });
+
+  it('excludes jobs outside the requested window', async () => {
+    const from = new Date(Date.now() + 300 * 86_400_000).toISOString();
+    const to = new Date(Date.now() + 301 * 86_400_000).toISOString();
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/calendar?from=${from}&to=${to}`,
+      headers: { cookie: ownerCookie },
+    });
+    expect(res.json().jobs).toEqual([]);
+  });
+
+  it('excludes cancelled jobs, which are not landing anywhere', async () => {
+    const account = await prisma.socialAccount.findFirst({
+      where: { organizationId, platform: 'INSTAGRAM' },
+    });
+    const piece = await prisma.contentPiece.create({
+      data: {
+        organizationId, format: 'CAROUSEL', status: 'ARCHIVED',
+        category: 'BUSINESS', title: 'Cancelled piece', hook: 'hook',
+      },
+    });
+    await prisma.publishingJob.create({
+      data: {
+        contentPieceId: piece.id, socialAccountId: account!.id, platform: 'INSTAGRAM',
+        status: 'CANCELLED', scheduledAt: new Date(Date.now() + 3_600_000),
+        idempotencyKey: `cal-cancelled-${Date.now()}`,
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET', url: '/api/calendar', headers: { cookie: ownerCookie },
+    });
+    const titles = res.json().jobs.map((j: { content?: { title: string } }) => j.content?.title);
+    expect(titles).not.toContain('Cancelled piece');
+  });
+
+  it('requires authentication', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/calendar' });
+    expect(res.statusCode).toBe(403);
+  });
+});

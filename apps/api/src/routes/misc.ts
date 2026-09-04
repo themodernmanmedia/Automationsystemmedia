@@ -277,6 +277,60 @@ export async function miscRoutes(app: FastifyInstance, ctx: AppContext): Promise
     return { jobs };
   });
 
+  /* ------------------------------- calendar ----------------------------- */
+
+  /**
+   * Publishing jobs in a date range, for the calendar.
+   *
+   * Distinct from /logs/publishing, which shows recent activity regardless of
+   * when it was scheduled. A calendar needs the opposite: everything landing in
+   * a window, including future work that has not run yet.
+   */
+  app.get('/calendar', { preHandler: requireAuth() }, async (request) => {
+    const scope = orgScope(request);
+    const query = z
+      .object({ from: z.coerce.date().optional(), to: z.coerce.date().optional() })
+      .parse(request.query);
+
+    const from = query.from ?? new Date(Date.now() - 7 * 86_400_000);
+    const to = query.to ?? new Date(Date.now() + 14 * 86_400_000);
+
+    const jobs = await prisma.publishingJob.findMany({
+      where: {
+        socialAccount: scope,
+        scheduledAt: { gte: from, lte: to },
+        status: { not: 'CANCELLED' },
+      },
+      include: {
+        socialAccount: { select: { platform: true, username: true } },
+        contentPiece: {
+          select: { id: true, title: true, hook: true, format: true, category: true, status: true },
+        },
+      },
+      orderBy: { scheduledAt: 'asc' },
+      take: 500,
+    });
+
+    return {
+      from,
+      to,
+      jobs: jobs.map((job) => ({
+        id: job.id,
+        scheduledAt: job.scheduledAt,
+        publishedAt: job.publishedAt,
+        status: job.status,
+        platform: job.platform,
+        username: job.socialAccount.username,
+        platformUrl: job.platformUrl,
+        lastError: job.lastError,
+        // Shows which side is doing the waiting: DELEGATED means the platform
+        // holds it, SELF_TIMED means this system must be up at that moment.
+        scheduleStrategy: job.scheduleStrategy,
+        content: job.contentPiece,
+      })),
+    };
+  });
+
   /* ------------------------------- overview ----------------------------- */
 
   app.get('/overview', { preHandler: requireAuth() }, async (request) => {

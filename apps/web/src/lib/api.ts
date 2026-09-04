@@ -152,3 +152,123 @@ export interface CostResponse {
   halted: boolean;
   breakdown: Array<{ service: string; costUsd: number; calls: number }>;
 }
+
+export interface CalendarResponse {
+  from: string;
+  to: string;
+  jobs: Array<{
+    id: string;
+    scheduledAt: string;
+    publishedAt: string | null;
+    status: string;
+    platform: string;
+    username: string;
+    platformUrl: string | null;
+    lastError: string | null;
+    scheduleStrategy: string;
+    content: {
+      id: string;
+      title: string;
+      hook: string;
+      format: string;
+      category: string;
+      status: string;
+    } | null;
+  }>;
+}
+
+export interface BrandResponse {
+  brand: {
+    id: string;
+    name: string;
+    logoUrl: string | null;
+    colors: Record<string, string>;
+    fonts: Record<string, string>;
+    tone: string[];
+    avoidList: string[];
+    ctaStyle: string;
+    visualDirection: string;
+    defaultSlideCount: number;
+    contentMix: Record<string, number>;
+    scoringWeights: Record<string, number>;
+  } | null;
+  defaults: {
+    colors: Record<string, string>;
+    fonts: Record<string, string>;
+    tone: string[];
+    avoid: string[];
+    contentMix: Record<string, number>;
+    scoringWeights: Record<string, number>;
+  };
+}
+
+export interface TopicsResponse {
+  topics: Array<{
+    id: string;
+    title: string;
+    summary: string;
+    category: string;
+    status: string;
+    compositeScore: number | null;
+    viralPotential: number | null;
+    isBreakingNews: boolean;
+    discoverySource: string;
+    discoveryUrl: string | null;
+    keywords: string[];
+    createdAt: string;
+    expiresAt: string | null;
+    _count: { sources: number; claims: number; contentPieces: number };
+  }>;
+}
+
+export interface AgentRunsResponse {
+  runs: Array<{
+    id: string;
+    agentName: string;
+    status: string;
+    trigger: string;
+    itemsProcessed: number;
+    itemsProduced: number;
+    durationMs: number | null;
+    costUsd: number | null;
+    startedAt: string;
+    errors: Array<{ id: string; errorCode: string; message: string; retryable: boolean }>;
+  }>;
+}
+
+export interface PublishingLogResponse {
+  jobs: Array<{
+    id: string;
+    platform: string;
+    status: string;
+    scheduledAt: string;
+    publishedAt: string | null;
+    platformUrl: string | null;
+    lastError: string | null;
+    lastErrorCode: string | null;
+    attemptCount: number;
+    socialAccount: { platform: string; username: string };
+    contentPiece: { id: string; title: string; format: string } | null;
+    attempts: Array<{
+      id: string;
+      attemptNumber: number;
+      step: string;
+      success: boolean;
+      errorCode: string | null;
+      errorMessage: string | null;
+      createdAt: string;
+    }>;
+  }>;
+}
+
+export interface AuditLogResponse {
+  logs: Array<{
+    id: string;
+    actorType: string;
+    actorId: string | null;
+    action: string;
+    subjectType: string | null;
+    subjectId: string | null;
+    createdAt: string;
+  }>;
+}
