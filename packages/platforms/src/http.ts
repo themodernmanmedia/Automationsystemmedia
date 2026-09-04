@@ -112,12 +112,29 @@ function classifyError(platform: string, res: Response, body: unknown, url: stri
   });
 }
 
+/**
+ * Parameter names whose value is a credential.
+ *
+ * Matched by pattern rather than listed exactly, because the exact list was
+ * wrong: it covered `access_token` and `client_secret` but not
+ * `fb_exchange_token`, which is how both Meta adapters pass a live access token
+ * during long-lived-token exchange. A failed exchange therefore wrote a working
+ * token into the error context and from there into the logs. Redaction is now
+ * the default for anything credential-shaped, so the next parameter a platform
+ * introduces is covered without a code change.
+ */
+const SENSITIVE_PARAM = /token|secret|password|credential|signature|(^|_)auth|(^|_)key($|_)|apikey|(^|_)code$/i;
+
 /** Strip credentials from URLs before they reach a log or an error context. */
 export function redactUrl(url: string): string {
   try {
     const u = new URL(url);
-    for (const key of ['access_token', 'client_secret', 'code', 'refresh_token']) {
-      if (u.searchParams.has(key)) u.searchParams.set(key, '[REDACTED]');
+    for (const key of [...u.searchParams.keys()]) {
+      if (SENSITIVE_PARAM.test(key)) u.searchParams.set(key, '[REDACTED]');
+    }
+    if (u.username || u.password) {
+      u.username = '[REDACTED]';
+      u.password = '';
     }
     return u.toString();
   } catch {

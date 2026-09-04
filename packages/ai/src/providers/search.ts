@@ -154,7 +154,11 @@ export class RssSearchProvider implements SearchProvider {
       .map((entry): SearchResult | null => {
         const title = decodeXml(tag(entry, 'title'));
         const link = tag(entry, 'link') || attr(entry, 'link', 'href');
-        if (!title || !link) return null;
+        // The feed chooses this value, so reject anything that is not an
+        // ordinary web link before it is stored and later fetched. The full
+        // address check happens at fetch time; this only stops the obvious
+        // schemes from ever entering the source table.
+        if (!title || !link || !isWebLink(link.trim())) return null;
         const dateText = tag(entry, 'pubDate') || tag(entry, 'published') || tag(entry, 'updated');
         const parsed = dateText ? new Date(dateText) : undefined;
         return {
@@ -166,6 +170,16 @@ export class RssSearchProvider implements SearchProvider {
         };
       })
       .filter((r): r is SearchResult => r !== null);
+  }
+}
+
+/** True only for an absolute http(s) URL with no embedded credentials. */
+function isWebLink(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return (u.protocol === 'http:' || u.protocol === 'https:') && !u.username && !u.password;
+  } catch {
+    return false;
   }
 }
 

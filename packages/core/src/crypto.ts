@@ -104,9 +104,16 @@ export function verifyPassword(password: string, stored: string): boolean {
 /* ------------------------------------------------------------------ */
 
 /**
- * OAuth `state` is the CSRF defense for the callback, so it must be
- * unforgeable, single-use, and time-bounded. We sign a payload rather than
- * storing a random value, so a callback can be validated without a round trip.
+ * OAuth `state` is the CSRF defense for the callback, so it must be unforgeable
+ * and time-bounded. We sign a payload rather than storing a random value, so a
+ * callback can be validated without a round trip.
+ *
+ * It is deliberately NOT single-use: there is no nonce store, so a signed state
+ * can be replayed until it expires. That is acceptable only because the
+ * provider `code` accompanying it is itself single-use and short-lived, so a
+ * replayed state cannot complete a second exchange. Making state single-use
+ * would require server-side storage and is the change to make if that
+ * assumption ever stops holding.
  */
 export function signValue(value: string, secret: string): string {
   const mac = createHmac('sha256', secret).update(value).digest('base64url');

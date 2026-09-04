@@ -6,6 +6,7 @@
  * fetched source: that is what makes a claim traceable, and what stops the
  * model from quietly supplementing thin sources with its training data.
  */
+import { BlockedUrlError, safeFetch } from '@mmos/core';
 import { researchOutputSchema, type ResearchOutput } from '@mmos/contracts';
 import type { SearchProvider, SearchResult } from '@mmos/ai';
 import { Agent, type AgentContext, type AgentResult } from '../base.js';
@@ -172,9 +173,13 @@ export class ResearcherAgent extends Agent<ResearchInput, ResearchResult> {
     };
 
     try {
-      const res = await fetch(result.url, {
+      // safeFetch, not fetch: this URL came out of a feed or a search provider,
+      // so its host is chosen by someone outside the system. Fetching it
+      // unchecked from inside the network, and then storing the response as
+      // source text the API returns, is a readable SSRF.
+      const res = await safeFetch(result.url, {
         headers: { 'user-agent': 'ModernManOS/1.0 (+content research)' },
-        signal: AbortSignal.timeout(15_000),
+        timeoutMs: 15_000,
       });
       // A snippet is still usable evidence, so a failed fetch degrades rather
       // than discarding the source.
@@ -187,6 +192,12 @@ export class ResearcherAgent extends Agent<ResearchInput, ResearchResult> {
       const text = stripHtml(html);
       return text.length > 200 ? { ...base, fullText: text.slice(0, 20_000) } : base;
     } catch (err) {
+      // A blocked URL is not a flaky network: something pointed the researcher
+      // at an address it must not reach, and that is worth seeing.
+      if (err instanceof BlockedUrlError) {
+        this.ctx.logger.warn({ url: result.url, reason: err.context['reason'] }, 'refused to fetch source URL');
+        return base;
+      }
       this.ctx.logger.debug({ err, url: result.url }, 'could not fetch source body; using snippet');
       return base;
     }
