@@ -52,7 +52,10 @@ def draw_frame(ctx: cairo.Context, ep: Episode, gt: float):
     vignette(ctx, W, H, 0.22)
     day, since = day_at(ep, gt)
     if day and getattr(sh, "badge", True) and not sh.name.startswith(("day_card", "title", "end")):
-        draw_day_badge(ctx, day, since)
+        if ep.hud:
+            ep.hud(ctx, ep, gt, day, since)
+        else:
+            draw_day_badge(ctx, day, since)
     draw_captions(ctx, ep, sh, t)
 
 

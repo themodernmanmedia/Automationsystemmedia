@@ -3,6 +3,7 @@ from importlib import import_module
 
 EPISODES = {
     "ignore-everyone-30-days": "everyday.episodes.ignore_everyone_30_days",
+    "last-to-leave-circle": "everyday.episodes.last_to_leave_circle",
 }
 
 

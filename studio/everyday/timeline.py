@@ -60,6 +60,7 @@ class Episode:
     shots: list[Shot]
     meta: dict = field(default_factory=dict)
     thumbnail: Optional[Callable] = None
+    hud: Optional[Callable] = None   # hud(ctx, ep, gt, value, since_change)
     total: float = 0.0
 
 
