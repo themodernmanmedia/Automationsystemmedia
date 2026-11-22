@@ -385,7 +385,7 @@ def chest_shot(f):
     if t < dex_go:
         shoot(f, sc, (6, 6, 12), (0, 0.5, -6), (4, 5, 9), (0, 0.5, -9), fov=55)
     elif t < open_t:
-        shoot(f, sc, (4, 3.5, pz + 5), (px, 1.2, pz - 2), (3, 3, cz + 5), (cx, 0.8, cz))
+        shoot(f, sc, (7.5, 4.5, pz + 6.5), (px, 1.0, pz - 1.5), (6.0, 3.8, cz + 6.5), (cx, 0.8, cz))
     else:
         shoot(f, sc, (2.4, 1.9, cz + 3.2), (cx, 0.9, cz), (1.8, 1.7, cz + 2.6), (cx, 1.0, cz), fov=50)
         gems_popup(ctx, t, open_t + 0.3, "100,000", x=W / 2, y=520)

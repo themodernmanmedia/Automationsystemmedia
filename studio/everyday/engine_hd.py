@@ -291,6 +291,8 @@ void main() {
     float fog = 1.0 - exp(-pow(dist * fog_density, 1.5));
     fog *= exp(-max(v_w.y, 0.0) * 0.02);
     col = mix(col, fog_col, clamp(fog, 0.0, 1.0));
+    if (any(isnan(col)) || any(isinf(col))) col = fog_col;
+    col = min(col, vec3(48.0));
     frag = vec4(col, v_vz);
 }
 """
@@ -381,10 +383,13 @@ float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yz
 void main() {
     vec4 s = texture(scene, uv);
     vec4 bl = texture(blurred, uv);
+    if (any(isnan(bl))) bl = s;
     float z = s.a;
     float coc = clamp(abs(z - focus) / max(focus, 0.01) * dof, 0.0, 1.0);
     vec3 c = mix(s.rgb, bl.rgb, coc);
-    c += texture(bloom, uv).rgb * bloom_k;
+    vec3 bm = texture(bloom, uv).rgb;
+    if (any(isnan(bm))) bm = vec3(0.0);
+    c += bm * bloom_k;
     c *= exposure;
     c = aces(c);
     float l = dot(c, vec3(0.2126, 0.7152, 0.0722));

@@ -377,7 +377,7 @@ def build_world(sc: Scene, t: float, radius: float, lava: float = 0.0, ring=True
     lava_y = -5.0 + rise * 4.65
     rq = round(radius, 2)
     # platform top (always) + outer floor (sinks when lava)
-    sc.mesh(("disc", rq), lambda: mesh_annulus(0.0, rq, 0.0, seg=96), "#4c9a33", kind=GRASS)
+    sc.mesh(("disc", rq), lambda: mesh_annulus(0.02, rq, 0.0, seg=96), "#4c9a33", kind=GRASS)
     if sink < 5.4:
         sq = round(sink, 2)
         sc.mesh(("floor", rq, sq), lambda: mesh_annulus(rq, SHORE, -sq, seg=128), "#4c9a33", kind=GRASS)
