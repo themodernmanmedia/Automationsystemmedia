@@ -788,8 +788,8 @@ def thumbnail(ctx):
     sc = Scene()
     W3.build_world(sc, 0.5, 2.6, 1.0)
     W3.person(sc, PIP, 0.0, 0.0, 0.0, W3.Pose(t=0.5, arms="panic", expr="shocked", blink=0.0, sweat=1.0))
-    W3.gem_pile(sc, 3.2, -1.0, -2.0, 0.5, n=50, s=0.8)
-    blit(ctx, _thumb_render(sc, (-1.6, 2.2, 4.6), (0.6, 1.2, 0)))
+    W3.gem_pile(sc, 1.9, 0.0, -0.6, 0.5, n=70, s=0.75)
+    blit(ctx, _thumb_render(sc, (-1.0, 1.75, 2.7), (0.55, 1.25, 0), fov=55))
     with at(ctx, 1380, 170, rot=0.05):
         headline(ctx, "1,000,000", 0, 0, 180, color="#29d3ff", ow=24)
     with at(ctx, 1380, 345, rot=0.05):
@@ -805,7 +805,7 @@ def thumbnail_b(ctx):
     sc2 = Scene()
     W3.build_world(sc2, 0.5, 2.4, 1.0)
     W3.person(sc2, PIP, 0.0, 0.0, 0.0, W3.Pose(t=0.5, arms="cheer", expr="laugh", blink=0.0))
-    right = _thumb_render(sc2, (0, 3.2, 6.5), (0, 1.0, 0), fov=50)
+    right = _thumb_render(sc2, (0, 2.3, 4.2), (0, 1.1, 0), fov=50)
     ctx.save()
     ctx.rectangle(0, 0, W / 2, H)
     ctx.clip()
@@ -830,9 +830,9 @@ def thumbnail_c(ctx):
     """C: the bribe — sweating player vs pile of gems."""
     sc = Scene()
     W3.build_world(sc, 0.5, 2.6, 1.0)
-    W3.person(sc, BRICK, -0.6, 0.0, 0.5, W3.Pose(t=0.5, arms="shrug", expr="shocked", blink=0.0, sweat=1.0, look_yaw=0.4))
-    W3.gem_pile(sc, 2.6, -1.0, -0.6, 0.5, n=70, s=0.9)
-    blit(ctx, _thumb_render(sc, (-0.6, 2.0, 4.4), (0.9, 1.3, 0), fov=55))
+    W3.person(sc, BRICK, -0.6, 0.0, -0.15, W3.Pose(t=0.5, arms="shrug", expr="shocked", blink=0.0, sweat=1.0, look_yaw=0.3, eye_x=1.0))
+    W3.gem_pile(sc, 1.6, 0.0, -0.4, 0.5, n=80, s=0.8)
+    blit(ctx, _thumb_render(sc, (-0.9, 1.8, 2.9), (0.5, 1.35, 0), fov=55))
     with at(ctx, 1380, 170, rot=0.04):
         headline(ctx, "TAKE IT", 0, 0, 170, color="#ffffff", ow=22)
     with at(ctx, 1380, 340, rot=0.04):
