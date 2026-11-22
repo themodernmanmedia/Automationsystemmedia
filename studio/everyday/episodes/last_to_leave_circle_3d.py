@@ -602,10 +602,10 @@ def why_win(f):
     if t < f.cue(1):
         host_close(f, P(f, "host", arms="hold", held="mic", expr="neutral"), lava=1.0)
     elif t < f.cue(2):
-        player_close(f, "brick", P(f, "brick", arms="cross", expr="smug"), lava=1.0, dist=2.7, side=0.6)
+        player_close(f, "brick", P(f, "brick", arms="cross", expr="smug"), lava=1.0, dist=2.7, side=0.6, named=("brick",))
     else:
         player_close(f, "pip", P(f, "pip", arms="idle", expr="sad" if t < f.cue(2) + 1.5 else "determined"),
-                     lava=1.0, dist=2.4, side=-0.4)
+                     lava=1.0, dist=2.4, side=-0.4, named=("pip",))
 
 
 def brick_celebrates(f):
