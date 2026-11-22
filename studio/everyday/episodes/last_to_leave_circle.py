@@ -672,17 +672,24 @@ SHOTS = [
 META = {
     "title": "Last To Leave The Circle Wins 1,000,000 Gems!",
     "alt_titles": [
-        "100 Players Fight For 1,000,000 Gems!",
-        "I Bribed 100 Players To Leave A Circle",
-        "Last To Leave The Lava Circle Wins!",
+        "100 Players vs 1 Shrinking Circle For 1,000,000 Gems!",
+        "I Bribed 100 Players To Quit... Last One Wins 1,000,000!",
+        "Last To Leave The Lava Circle Wins 1,000,000 Gems!",
     ],
-    "description": """100 players. 1 shrinking circle. 1,000,000 gems for the last one standing. But every round I try to bribe them to quit... and then the floor turns to lava.
+    "description": """100 players. 1 shrinking circle. The last one to leave wins 1,000,000 gems! But every round the circle gets smaller, the floor turns to lava, and I try to bribe every player to quit. Who would YOU bet on: Pip, Brick or Zara?
 
-Who would you bet on — Pip, Brick, or Zara? Comment below!""",
+In this Last To Leave The Circle challenge, 100 blocky players battle through 6 rounds: a 10,000-gem bribe, a shrinking circle, the floor is lava, a mystery chest, a night round, and a final briefcase standoff worth 500,000 gems. Stay to the end for the twist.
+
+Comment who you think wins BEFORE the end. Subscribe for the next one: Last To Leave The Floating Island!""",
     "sources": [],
-    "footer": "#lasttoleave #challenge #animation #blockworld #1000000",
-    "tags": ["last to leave", "last to leave circle", "100 players", "challenge", "1000000 gems", "block world animation",
-             "blocky animation", "lava challenge", "animated challenge", "who will win"],
+    "footer": "#LastToLeave #Challenge #Animation",
+    "tags": [
+        "last to leave", "last to leave circle", "last to leave the circle wins", "last to leave wins",
+        "100 players", "100 players challenge", "1000000 challenge", "challenge video", "elimination challenge",
+        "floor is lava", "lava challenge", "shrinking circle", "mystery chest", "bribe challenge",
+        "block world animation", "blocky animation", "animated challenge", "challenge animation",
+        "who will win", "last one standing",
+    ],
 }
 
 
@@ -694,15 +701,14 @@ def thumbnail(ctx):
     B.ground(ctx, t, "lava", frame=3)
     glow(ctx, W / 2, H, 1100, "#ff6a00", 0.45)
     # tiny safe circle
-    B.arena(ctx, t, radius=0.32, lava=1.0)
-    PIP.draw(ctx, 820, 900, 1.6, B.BPose(t=t, arms="panic", expr="shocked", blink=0.0, sweat=1.0))
-    BRICK.draw(ctx, 1080, 900, 1.4, B.BPose(t=t + 1, arms="out", expr="angry", blink=0.0))
-    B.gem_pile(ctx, 1640, 1000, 1.4, t)
-    with at(ctx, 470, 190, rot=-0.05):
-        headline(ctx, "1,000,000", 0, 0, 170, color="#29d3ff", ow=22)
-    with at(ctx, 470, 360, rot=-0.05):
+    with at(ctx, 0, 300):
+        B.arena(ctx, t, radius=0.42, lava=1.0)
+    PIP.draw(ctx, 900, 1260, 3.3, B.BPose(t=t, arms="panic", expr="shocked", blink=0.0, sweat=1.0, look=0.6))
+    B.gem_pile(ctx, 1560, 1060, 2.6, t)
+    with at(ctx, 1450, 170, rot=0.05):
+        headline(ctx, "1,000,000", 0, 0, 180, color="#29d3ff", ow=24)
+    with at(ctx, 1450, 345, rot=0.05):
         headline(ctx, "GEMS", 0, 0, 150, color="#ffffff", ow=20)
-    G.arrow(ctx, 560, 520, 760, 690, c="#ff2222", w=22)
 
 
 EPISODE = Episode(
@@ -716,3 +722,69 @@ EPISODE = Episode(
     thumbnail=thumbnail,
     hud=hud,
 )
+
+
+# --------------------------------------------------------------------------
+# Thumbnail variants for YouTube "Test & Compare" (A/B/C)
+#   A  "the prize"     : one shocked kid on a tiny circle in lava + giant number
+#   B  "100 vs 1"      : before/after contrast, no words beyond two numbers
+#   C  "the bribe"     : temptation — sweating player vs open case of gems
+# Rules applied: one focal subject, readable at 160px wide, max 3 words,
+# saturated complementary colours (lava orange vs gem cyan), clear emotion,
+# a question the title doesn't answer.
+# --------------------------------------------------------------------------
+
+
+def thumbnail_b(ctx):
+    t = 0.5
+    # left: full circle of 100
+    with saved(ctx):
+        ctx.rectangle(0, 0, W / 2, H)
+        ctx.clip()
+        with at(ctx, -480, 0, s=1.0):
+            B.world(ctx, t)
+            B.arena(ctx, t, radius=1.0)
+            B.crowd(ctx, t, 100, radius=1.0, expr="happy")
+    # right: one player, tiny circle, lava everywhere
+    with saved(ctx):
+        ctx.rectangle(W / 2, 0, W / 2, H)
+        ctx.clip()
+        with at(ctx, W / 2 - 480, 0):
+            B.sky(ctx, t)
+            B.hills(ctx, t)
+            B.ground(ctx, t, "lava", frame=3)
+            glow(ctx, 960, 900, 900, "#ff6a00", 0.5)
+            B.arena(ctx, t, radius=0.26, lava=1.0)
+            PIP.draw(ctx, 960, 1000, 2.6, B.BPose(t=t, arms="cheer", expr="laugh", blink=0.0))
+    ctx.rectangle(W / 2 - 8, 0, 16, H)
+    fill(ctx, "#ffffff")
+    with at(ctx, 480, 190, rot=-0.04):
+        headline(ctx, "100", 0, 0, 230, color="#ffffff", ow=26)
+    with at(ctx, 1440, 190, rot=0.04):
+        headline(ctx, "1", 0, 0, 260, color="#ffd60a", ow=28)
+    G.arrow(ctx, 760, 820, 1180, 820, c="#ffd60a", w=26)
+
+
+def thumbnail_c(ctx):
+    t = 0.5
+    B.sky(ctx, t)
+    B.hills(ctx, t)
+    B.ground(ctx, t, "lava", frame=5)
+    glow(ctx, 1300, 700, 900, "#29d3ff", 0.35)
+    # open case overflowing with gems
+    with at(ctx, 1320, 930):
+        ctx.rectangle(-330, -230, 660, 230)
+        fill(ctx, "#5c3a1e", preserve=True)
+        stroke(ctx, "#2b1a0d", 10)
+        ctx.rectangle(-330, -560, 660, 300)
+        fill(ctx, "#3e2612", preserve=True)
+        stroke(ctx, "#2b1a0d", 10)
+    B.gem_pile(ctx, 1320, 800, 3.0, t)
+    BRICK.draw(ctx, 520, 1500, 3.4, B.BPose(t=t, arms="shrug", expr="shocked", look=1, sweat=1.0, blink=0.0))
+    with at(ctx, 1330, 170, rot=0.04):
+        headline(ctx, "TAKE IT", 0, 0, 170, color="#ffffff", ow=22)
+    with at(ctx, 1330, 340, rot=0.04):
+        headline(ctx, "OR STAY?", 0, 0, 150, color="#7cff6b", ow=20)
+
+
+THUMBNAILS = {"A_prize": thumbnail, "B_100_vs_1": thumbnail_b, "C_bribe": thumbnail_c}
