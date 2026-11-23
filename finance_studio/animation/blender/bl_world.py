@@ -43,6 +43,12 @@ def build(cfg, fonts, D):
         return
     if kind == "city_dusk":
         return city_dusk(cfg, fonts, D)
+    if kind == "apartment_night":
+        return apartment_night(cfg, fonts, D)
+    if kind == "grocery_aisle":
+        return grocery_aisle(cfg, fonts, D)
+    if kind == "studio":
+        return studio(cfg, fonts, D)
     raise ValueError(f"unknown background {kind}")
 
 
@@ -316,3 +322,159 @@ def city_dusk(cfg, fonts, D):
     for j, xx in enumerate(cfg.get("foreground_hedges", [-11.0, -3.5, 6.0, 13.0])):
         L.shape(f"fg.hedge{j}", L.bumpy_pts(xx, -4.95, 1.6, 12, 0.06, squash=0.55), "#24452F", 0.0, fg, INK, 0.04)
         L.shape(f"fg.hedge{j}.hi", L.bumpy_pts(xx + 0.3, -4.7, 0.9, 9, 0.06, squash=0.45), "#2F5A3D", 0.001, fg, None)
+
+
+# ----------------------------------------------------------------------------------- interiors
+def _room_shell(cfg, D, wall, wall_dark, floor, floor_dark, ground):
+    back = layer("room_back", -4.0, D)
+    fl = ground * D / (D + 4.0)
+    L.rect("room.wall", -30, fl, 30, 14, wall, 0.0, back)
+    L.rects_mesh("room.stripes", [(x, fl, x + 0.9, 14) for x in range(-30, 30, 2)], wall_dark, 0.001, back,
+                 alpha=0.35)
+    L.rect("room.base", -30, fl, 30, fl + 0.35, "#EDE4D3", 0.002, back, INK, 0.03)
+    flr = layer("room_floor", -1.5, D)
+    L.rect("room.floor", -30, -9, 30, fl * (D + 4.0) / (D + 1.5) + 0.02, floor, 0.0, flr)
+    L.rects_mesh("room.boards", [(-30, y, 30, y + 0.035) for y in [ground + 0.6 - k * 0.7 for k in range(10)]],
+                 floor_dark, 0.001, flr)
+    return back, fl
+
+
+def apartment_night(cfg, fonts, D):
+    """Small apartment kitchen at night: window with city lights, fridge, table, bills."""
+    rng = random.Random(cfg.get("seed", 3))
+    ground = cfg.get("ground_y", -3.2)
+    back, fl = _room_shell(cfg, D, "#6E5E86", "#62537A", "#9C6B4E", "#86593F", ground)
+    # window with night skyline
+    wx0, wx1, wy0, wy1 = -6.2, -1.6, fl + 3.2, fl + 7.6
+    L.rect("win.frame", wx0 - 0.25, wy0 - 0.25, wx1 + 0.25, wy1 + 0.25, "#EDE4D3", 0.003, back, INK, 0.035)
+    sky = L.rect("win.sky", wx0, wy0, wx1, wy1, "#000000", 0.004, back)
+    sky.data.materials[0] = L.gradient_material([(0.0, "#3B3F72"), (1.0, "#171A3A")])
+    x = wx0
+    bl, lit = [], []
+    while x < wx1:
+        w, h = rng.uniform(0.35, 0.8), rng.uniform(0.8, 3.2)
+        bl.append((x, wy0, min(x + w, wx1), wy0 + h))
+        for yy in range(int(h / 0.3)):
+            for xx in range(int(w / 0.25)):
+                if rng.random() < 0.35:
+                    lx, ly = x + 0.08 + xx * 0.25, wy0 + 0.15 + yy * 0.3
+                    if lx + 0.1 < wx1:
+                        lit.append((lx, ly, lx + 0.1, ly + 0.12))
+        x += w + 0.05
+    L.rects_mesh("win.bldg", bl, "#262A50", 0.005, back)
+    L.rects_mesh("win.lit", lit, "#FFD98A", 0.006, back)
+    L.shape("win.moon", L.ellipse_pts(wx1 - 0.8, wy1 - 0.8, 0.35, 0.35, 12), "#FFF1C9", 0.0055, back, None)
+    L.rect("win.mullion_v", (wx0 + wx1) / 2 - 0.06, wy0, (wx0 + wx1) / 2 + 0.06, wy1, "#EDE4D3", 0.007, back)
+    L.rect("win.mullion_h", wx0, (wy0 + wy1) / 2 - 0.06, wx1, (wy0 + wy1) / 2 + 0.06, "#EDE4D3", 0.007, back)
+    L.rect("win.sill", wx0 - 0.45, wy0 - 0.45, wx1 + 0.45, wy0 - 0.2, "#EDE4D3", 0.008, back, INK, 0.03)
+    L.shape("plant.pot", [(wx0 + 0.3, wy0 - 0.2), (wx0 + 0.9, wy0 - 0.2), (wx0 + 0.8, wy0 + 0.35),
+                          (wx0 + 0.4, wy0 + 0.35)], "#C9784E", 0.009, back, INK, 0.03, smooth=False)
+    L.shape("plant.leaves", L.bumpy_pts(wx0 + 0.6, wy0 + 0.75, 0.45, 7, 0.2), "#3F7A5A", 0.0085, back, INK, 0.03)
+    # kitchen: counters, cabinets, fridge
+    cx0 = 1.0
+    L.rect("k.counter", cx0, fl, cx0 + 7.5, fl + 3.0, "#E7DCC8", 0.003, back, INK, 0.035)
+    L.rect("k.top", cx0 - 0.15, fl + 3.0, cx0 + 7.65, fl + 3.25, "#3A3550", 0.004, back, INK, 0.03)
+    L.rects_mesh("k.doors", [(cx0 + 0.2 + k * 1.85, fl + 0.3, cx0 + 1.85 + k * 1.85, fl + 2.8) for k in range(4)],
+                 "#D8CBB3", 0.004, back)
+    L.rects_mesh("k.knobs", [(cx0 + 1.55 + k * 1.85, fl + 1.5, cx0 + 1.65 + k * 1.85, fl + 1.75) for k in range(4)],
+                 "#3A3550", 0.005, back)
+    L.rect("k.upper", cx0 + 0.3, fl + 5.0, cx0 + 7.2, fl + 7.3, "#E7DCC8", 0.003, back, INK, 0.035)
+    L.rect("k.fridge", cx0 + 7.8, fl, cx0 + 10.3, fl + 7.4, "#DCE3E6", 0.003, back, INK, 0.035)
+    L.rect("k.fridge_line", cx0 + 7.8, fl + 4.9, cx0 + 10.3, fl + 4.98, "#2A2230", 0.004, back)
+    L.rect("k.handle", cx0 + 8.0, fl + 3.4, cx0 + 8.12, fl + 4.5, "#8C8296", 0.005, back)
+    for k, col in enumerate(("#F25C54", "#F7B32B", "#2FA866")):
+        L.rect(f"k.note{k}", cx0 + 8.6 + k * 0.45, fl + 5.6 - k * 0.2, cx0 + 8.95 + k * 0.45, fl + 6.0 - k * 0.2, col,
+               0.006, back)
+    L.shape("k.kettle", [(cx0 + 4.6, fl + 3.25), (cx0 + 5.5, fl + 3.25), (cx0 + 5.4, fl + 3.9), (cx0 + 5.05, fl + 4.05),
+                         (cx0 + 4.7, fl + 3.9)], "#E3A72F", 0.006, back, INK, 0.03)
+    L.shape("lamp.shade", [(-0.2, fl + 9.0), (0.5, fl + 9.0), (0.8, fl + 8.3), (-0.5, fl + 8.3)], "#F2C94C", 0.004,
+            back, INK, 0.03, smooth=False)
+    L.shape("lamp.glow", L.ellipse_pts(0.15, fl + 7.6, 2.2, 1.4, 14), "#FFE6A8", 0.0035, back, None, alpha=0.18)
+    # table + chair in front (z near 0.6) - characters sit at x ~ table_x - 1.6
+    tl = layer("table", 0.6, D)
+    tx = cfg.get("table_x", 1.0)
+    ty = ground + 2.05
+    L.rect("t.top", tx - 2.2, ty, tx + 2.2, ty + 0.22, "#7A4E37", 0.0, tl, INK, 0.035)
+    L.rect("t.leg1", tx - 1.95, ground, tx - 1.75, ty, "#6A4230", -0.002, tl, INK, 0.03)
+    L.rect("t.leg2", tx + 1.75, ground, tx + 1.95, ty, "#6A4230", -0.002, tl, INK, 0.03)
+    if cfg.get("bills", True):
+        for k, (bx, rot_col) in enumerate(((tx - 0.9, "#FFFFFF"), (tx - 0.2, "#F7F3EA"), (tx + 0.6, "#FFFFFF"))):
+            L.rect(f"t.bill{k}", bx, ty + 0.22, bx + 0.75, ty + 0.3, rot_col, 0.002, tl, INK, 0.02)
+        L.rect("t.laptop", tx + 0.2, ty + 0.22, tx + 1.6, ty + 0.32, "#3A3550", 0.003, tl, INK, 0.025)
+        L.shape("t.screen", [(tx + 1.5, ty + 0.3), (tx + 1.7, ty + 0.3), (tx + 1.95, ty + 1.25), (tx + 1.75, ty + 1.25)],
+                "#3A3550", 0.003, tl, INK, 0.025, smooth=False)
+        L.shape("t.mug", [(tx - 1.7, ty + 0.22), (tx - 1.35, ty + 0.22), (tx - 1.37, ty + 0.62),
+                          (tx - 1.68, ty + 0.62)], "#E0524A", 0.003, tl, INK, 0.025, smooth=False)
+    ch = layer("chair", -0.6, D)
+    cxp = cfg.get("chair_x", -1.0)
+    L.rect("c.seat", cxp - 0.75, ground + 1.0, cxp + 0.75, ground + 1.18, "#5B3B33", 0.0, ch, INK, 0.03)
+    L.rect("c.back", cxp - 0.75, ground + 1.0, cxp - 0.55, ground + 2.9, "#5B3B33", 0.0, ch, INK, 0.03)
+    L.rect("c.leg1", cxp - 0.7, ground, cxp - 0.55, ground + 1.0, "#4A2F28", -0.001, ch, INK, 0.025)
+    L.rect("c.leg2", cxp + 0.55, ground, cxp + 0.7, ground + 1.0, "#4A2F28", -0.001, ch, INK, 0.025)
+
+
+def grocery_aisle(cfg, fonts, D):
+    """Supermarket aisle: stocked shelves, price strips, hanging aisle signs."""
+    rng = random.Random(cfg.get("seed", 5))
+    ground = cfg.get("ground_y", -3.2)
+    back, fl = _room_shell(cfg, D, "#E6E1D3", "#DAD3C1", "#CFC8BA", "#BDB5A6", ground)
+    sh = layer("shelves", -3.0, D)
+    base = ground * D / (D + 3.0)
+    colors = ["#E0524A", "#F7B32B", "#2FA866", "#3E7C9B", "#E3A72F", "#8E5A9E", "#F2F2F2", "#D2453F"]
+    for u in range(-4, 5):
+        x0 = u * 4.2 - 2.0
+        L.rect(f"sh{u}.body", x0, base, x0 + 4.1, base + 7.2, "#B8B2A6", 0.0, sh, INK, 0.035)
+        goods, strips, tags = [], [], []
+        for r in range(5):
+            y = base + 0.4 + r * 1.35
+            strips.append((x0 + 0.05, y - 0.12, x0 + 4.05, y))
+            x = x0 + 0.15
+            while x < x0 + 3.85:
+                w = rng.uniform(0.22, 0.5)
+                h = rng.uniform(0.5, 1.05)
+                goods.append(((x, y, x + w, y + h), rng.choice(colors)))
+                x += w + 0.06
+            for k in range(3):
+                tx = x0 + 0.4 + k * 1.3
+                tags.append((tx, y - 0.11, tx + 0.42, y + 0.0))
+        by_col = {}
+        for rct, col in goods:
+            by_col.setdefault(col, []).append(rct)
+        for col, rs in by_col.items():
+            L.rects_mesh(f"sh{u}.g{col}", rs, col, 0.002, sh)
+        L.rects_mesh(f"sh{u}.strips", strips, "#F5F1E6", 0.003, sh)
+        L.rects_mesh(f"sh{u}.tags", tags, "#F7D154", 0.004, sh)
+    sg = layer("signs", -1.0, D)
+    for k, (x, label) in enumerate(cfg.get("signs", [(-6.5, "DAIRY"), (0.0, "PRODUCE"), (6.5, "BAKERY")])):
+        L.rect(f"sign{k}.str", x - 0.02, 3.6, x + 0.02, 6, "#555066", 0.0, sg)
+        L.rect(f"sign{k}", x - 1.3, 3.0, x + 1.3, 3.7, "#2E6B8C", 0.001, sg, INK, 0.035)
+        L.text(f"sign{k}.t", label, 0.36, "#FFFFFF", fonts["black"], 0.002, sg, (x, 3.35))
+    ct = layer("cart", 1.2, D)
+    cx = cfg.get("cart_x", 4.2)
+    L.shape("cart.basket", [(cx - 1.0, ground + 1.0), (cx + 1.1, ground + 1.0), (cx + 1.35, ground + 2.2),
+                            (cx - 1.25, ground + 2.2)], "#C9CED6", 0.0, ct, INK, 0.035, smooth=False)
+    L.rects_mesh("cart.grid", [(cx - 1.0 + k * 0.3, ground + 1.05, cx - 0.97 + k * 0.3, ground + 2.15) for k in range(8)],
+                 "#8C8296", 0.001, ct)
+    L.rect("cart.handle", cx - 1.6, ground + 2.3, cx - 1.2, ground + 2.4, "#E0524A", 0.002, ct, INK, 0.02)
+    for k, wx in enumerate((cx - 0.7, cx + 0.8)):
+        L.shape(f"cart.wheel{k}", L.ellipse_pts(wx, ground + 0.15, 0.16, 0.16, 8), "#2A2230", 0.0, ct, None)
+    L.rect("cart.frame", cx - 0.9, ground + 0.3, cx + 1.0, ground + 0.4, "#8C8296", 0.0, ct)
+
+
+def studio(cfg, fonts, D):
+    """Clean explainer backdrop: soft gradient + subtle grid + floating coins/notes."""
+    rng = random.Random(cfg.get("seed", 9))
+    bg = layer("studio_bg", -20.0, D)
+    g = L.rect("studio.grad", -30, -20, 30, 20, "#000000", 0.0, bg)
+    g.data.materials[0] = L.gradient_material([(0.0, cfg.get("bottom", "#F3E9D6")), (1.0, cfg.get("top", "#E6DCF0"))])
+    L.rects_mesh("studio.grid", [(x, -20, x + 0.04, 20) for x in range(-30, 30)] +
+                 [(-30, y, 30, y + 0.04) for y in range(-20, 20)], "#CFC3DD", 0.001, bg, alpha=0.5)
+    mid = layer("studio_mid", -8.0, D)
+    for k in range(cfg.get("coins", 10)):
+        x, y, r = rng.uniform(-11, 11), rng.uniform(-5, 5), rng.uniform(0.25, 0.5)
+        L.shape(f"coin{k}", L.ellipse_pts(x, y, r, r * 0.95, 12), "#F2C94C", 0.0, mid, INK, 0.03, alpha=1.0)
+        L.text(f"coin{k}.t", "$", r * 1.1, "#C9962E", fonts["black"], 0.002, mid, (x, y - r * 0.05))
+    ground = cfg.get("ground_y", -3.2)
+    if cfg.get("floor", True):
+        L.shape("studio.floor", L.ellipse_pts(0, ground - 0.05, 6.5, 0.6, 16), "#D9CCE6", -0.5, None, None,
+                alpha=0.7)

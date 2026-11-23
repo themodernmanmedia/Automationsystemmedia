@@ -14,7 +14,7 @@ from audio.synth import CHORDS, SFX_KINDS
 
 from .motion import EASES, EXPRESSIONS, POSES, SPEC_DIR
 
-BACKGROUNDS = {"city_dusk", "solid"}
+BACKGROUNDS = {"city_dusk", "solid", "apartment_night", "grocery_aisle", "studio"}
 PROP_KINDS = {"paycheck", "badge", "price_tag", "puff"}
 GRAPHIC_SCENES = {"waterfall"}
 

@@ -34,6 +34,7 @@ def build(spec, name="maya", collection=None):
         return L.line(f"{name}.{n}", pts, col, w, z, parent, smooth, closed, collection=collection)
 
     root = E("root", (0, 0), None)
+    J["scale"] = spec.get("scale", 1.0)
     hx, hy = sk["hip"]
     hip = E("hip", (hx, hy), root)
     torso = E("torso", (0, 0), hip, 0.0)
@@ -117,10 +118,8 @@ def build(spec, name="maya", collection=None):
     head.scale = (1.1, 1.1, 1)  # stylized: slightly larger head keeps expressions readable
     hcx, hcy = sk["head_center"]
     H = lambda x, y: (hcx + x, hcy + y)  # noqa: E731 - head-centre helper
-    hair_back = L.bumpy_pts(*H(-0.07, 0.1), 0.6, bumps=11, depth=0.07, phase=0.3, squash=0.95)
-    S("hair_back", hair_back, P["hair"], -3 * DZ, head)
-    S("bun", L.bumpy_pts(*H(-0.22, 0.66), 0.27, bumps=8, depth=0.1, phase=0.2), P["hair"], -4 * DZ, head)
-    S("bun_hi", L.ellipse_pts(*H(-0.27, 0.72), 0.08, 0.05, 6, 0.4), P["hair_light"], -3.5 * DZ, head, stroke=None)
+    style = spec.get("style_opts", {})
+    hair_style = style.get("hair", "curly_bun")
     face = [H(-0.43, 0.2), H(-0.38, 0.45), H(-0.1, 0.58), H(0.26, 0.54), H(0.49, 0.32), H(0.55, 0.02),
             H(0.5, -0.24), H(0.3, -0.44), H(0.1, -0.53), H(-0.14, -0.49), H(-0.34, -0.3)]
     S("face", face, P["skin"], 0, head)
@@ -128,15 +127,37 @@ def build(spec, name="maya", collection=None):
       P["skin_shadow"], DZ * 0.4, head, stroke=None)
     S("ear", L.ellipse_pts(*H(-0.33, -0.02), 0.085, 0.13, 7), P["skin"], DZ, head)
     LN("ear_in", [H(-0.31, 0.06), H(-0.35, 0.0), H(-0.31, -0.07)], 1.5 * DZ, head, col=P["skin_shadow"], w=lw * 0.8)
-    LN("earring", L.ellipse_pts(*H(-0.33, -0.19), 0.05, 0.055, 8), 1.2 * DZ, head, col=P["earring"], w=lw * 0.9,
-       closed=True)
-    # hair front (hairline with curls) sits over the forehead
-    hf = [H(-0.5, 0.2), H(-0.46, 0.52), H(-0.2, 0.7), H(0.18, 0.69), H(0.46, 0.5), H(0.53, 0.32), H(0.38, 0.36),
-          H(0.24, 0.3), H(0.1, 0.37), H(-0.06, 0.29), H(-0.24, 0.33), H(-0.36, 0.1)]
-    S("hair_front", hf, P["hair"], 3 * DZ, head)
-    for k, (cx, cy) in enumerate(((-0.52, 0.3), (-0.45, -0.05), (-0.3, 0.5))):
-        LN(f"hair_curl{k}", [H(cx, cy), H(cx - 0.06, cy - 0.06), H(cx, cy - 0.12)], -2.5 * DZ, head,
-           col=P["hair_light"], w=lw * 0.8)
+    if style.get("earrings", True):
+        LN("earring", L.ellipse_pts(*H(-0.33, -0.19), 0.05, 0.055, 8), 1.2 * DZ, head, col=P["earring"],
+           w=lw * 0.9, closed=True)
+    if hair_style == "curly_bun":
+        S("hair_back", L.bumpy_pts(*H(-0.07, 0.1), 0.6, bumps=11, depth=0.07, phase=0.3, squash=0.95), P["hair"],
+          -3 * DZ, head)
+        S("bun", L.bumpy_pts(*H(-0.22, 0.66), 0.27, bumps=8, depth=0.1, phase=0.2), P["hair"], -4 * DZ, head)
+        S("bun_hi", L.ellipse_pts(*H(-0.27, 0.72), 0.08, 0.05, 6, 0.4), P["hair_light"], -3.5 * DZ, head,
+          stroke=None)
+        hf = [H(-0.5, 0.2), H(-0.46, 0.52), H(-0.2, 0.7), H(0.18, 0.69), H(0.46, 0.5), H(0.53, 0.32), H(0.38, 0.36),
+              H(0.24, 0.3), H(0.1, 0.37), H(-0.06, 0.29), H(-0.24, 0.33), H(-0.36, 0.1)]
+        S("hair_front", hf, P["hair"], 3 * DZ, head)
+        for k, (cx, cy) in enumerate(((-0.52, 0.3), (-0.45, -0.05), (-0.3, 0.5))):
+            LN(f"hair_curl{k}", [H(cx, cy), H(cx - 0.06, cy - 0.06), H(cx, cy - 0.12)], -2.5 * DZ, head,
+               col=P["hair_light"], w=lw * 0.8)
+    elif hair_style == "short_crop":
+        S("hair_back", [H(-0.47, 0.1), H(-0.46, 0.45), H(-0.2, 0.66), H(0.2, 0.66), H(0.42, 0.5), H(0.2, 0.4),
+                        H(-0.2, 0.35), H(-0.36, 0.08)], P["hair"], -1 * DZ, head)
+        hf = [H(-0.47, 0.18), H(-0.44, 0.5), H(-0.18, 0.67), H(0.22, 0.66), H(0.48, 0.47), H(0.5, 0.36),
+              H(0.3, 0.42), H(0.05, 0.4), H(-0.2, 0.4), H(-0.34, 0.25), H(-0.38, 0.06)]
+        S("hair_front", hf, P["hair"], 3 * DZ, head)
+        LN("hair_part", [H(-0.05, 0.6), H(0.15, 0.55), H(0.32, 0.5)], 3.5 * DZ, head, col=P["hair_light"],
+           w=lw * 0.8)
+    if style.get("beard"):
+        S("beard", [H(-0.36, -0.08), H(-0.22, -0.32), H(0.02, -0.5), H(0.3, -0.44), H(0.48, -0.22),
+                    H(0.47, -0.12), H(0.3, -0.3), H(0.05, -0.36), H(-0.18, -0.2)], P["hair"], 1.0 * DZ, head,
+          stroke=None, alpha=0.9)
+    if style.get("glasses"):
+        for tag, cx, rx in (("f", 0.04, 0.13), ("b", 0.31, 0.09)):
+            LN(f"glass_{tag}", L.ellipse_pts(*H(cx, 0.04), rx, 0.12, 8), 4.2 * DZ, head, w=lw * 0.9, closed=True)
+        LN("glass_bridge", [H(0.17, 0.06), H(0.22, 0.07)], 4.2 * DZ, head, w=lw * 0.8)
 
     # eyes: group empty scaled in Y for blinks/eye-open; pupil empty slides for gaze
     def eye(tag, cx, cy, rx, ry):
@@ -211,8 +232,10 @@ def apply_channels(J, ch, start_frame=1):
     for i in range(n):
         f = start_frame + i
         L.key_transform(root, f, loc=(ch["x"][i], ch["y"][i] + ch.get("ground", [0] * n)[i]))
-        root.scale[0] = ch["facing"][i]
+        sc = J.get("scale", 1.0)
+        root.scale = (ch["facing"][i] * sc, sc, 1.0)
         root.keyframe_insert("scale", frame=f, index=0)
+        root.keyframe_insert("scale", frame=f, index=1)
         for chan, node in rot_nodes.items():
             L.key_transform(J[node], f, rot_deg=ch[chan][i])
         eo = max(ch["eye_open"][i], 0.06)
