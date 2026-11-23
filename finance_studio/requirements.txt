@@ -1,0 +1,11 @@
+# Python 3.11+ (tested on 3.13). Install into a virtualenv:
+#   python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
+pyyaml>=6.0
+pydantic>=2.7
+python-dotenv>=1.0
+requests>=2.31
+numpy>=1.26
+pillow>=10.0
+manim>=0.18        # financial charts (needs cairo + pango system libs)
+pytest>=8.0
+# System tools (not pip): blender>=4.0, ffmpeg>=6.0, ffprobe, espeak-ng (draft voice only), xvfb (headless EEVEE)

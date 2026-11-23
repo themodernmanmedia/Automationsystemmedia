@@ -1,0 +1,71 @@
+# Finance Studio configuration. Secrets never go here - they live in .env.
+# Any value can be overridden with an environment variable: FINSTUDIO__SECTION__KEY=value
+# e.g. FINSTUDIO__VIDEO__FPS=24
+
+channel:
+  name: "Ledger & Lantern"          # working title - original brand, change freely
+  tagline: "How money really works, explained in motion."
+  language: "en-US"
+  audience: "US adults 18-44"
+  disclaimer: >-
+    This video is for educational purposes only and is not financial, investment,
+    tax, or legal advice. The creators are not licensed financial professionals.
+    Do your own research and consider speaking with a qualified professional.
+
+paths:
+  assets: assets
+  output: output
+  logs: logs
+  cache: assets/cache
+
+video:
+  width: 1920
+  height: 1080
+  fps: 30
+  codec: libx264
+  pix_fmt: yuv420p
+  crf: 18
+  preset: medium
+  audio_codec: aac
+  audio_bitrate: 192k
+  audio_sample_rate: 48000
+
+episode:
+  target_minutes: [8, 12]
+  script_words: [1200, 1600]
+  words_per_minute: 150
+
+audio:
+  narration_lufs: -16.0          # YouTube-friendly integrated loudness for the final mix
+  music_gain_db: -22.0           # music bed under narration
+  music_duck_db: -8.0            # extra ducking while narration is active
+  sfx_gain_db: -10.0
+
+tts:
+  provider: elevenlabs           # elevenlabs | openai | espeak (draft only) | file
+  fallback_provider: espeak      # used only when allow_draft_voice is true
+  allow_draft_voice: true        # espeak-ng is robotic: drafts/tests only, never publish
+  elevenlabs:
+    model_id: eleven_multilingual_v2
+    voice_id: ""                 # or ELEVENLABS_VOICE_ID in .env
+    stability: 0.5
+    similarity_boost: 0.75
+    style: 0.15
+  espeak:
+    voice: en-us
+    speed_wpm: 150
+
+render:
+  blender_engine: BLENDER_EEVEE  # BLENDER_EEVEE | CYCLES | BLENDER_WORKBENCH
+  eevee_samples: 16
+  use_xvfb: true                 # EEVEE needs an OpenGL context on headless Linux
+  threads: 0                     # 0 = auto
+
+pipeline:
+  retries: 3
+  retry_backoff_seconds: 2.0
+  require_publish_approval: true # hard gate: nothing uploads without explicit approval
+
+logging:
+  level: INFO
+  json_file: true

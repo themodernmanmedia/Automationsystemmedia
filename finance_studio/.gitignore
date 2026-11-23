@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+output/*
+!output/.gitkeep
+logs/*
+!logs/.gitkeep
+assets/cache/*
+!assets/cache/.gitkeep
+media/
