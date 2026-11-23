@@ -1,0 +1,500 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Where On Earth</title>
+<style>
+  html,body{margin:0;width:1280px;height:720px;overflow:hidden;background:#000;font-family:Inter,sans-serif}
+  #c{position:absolute;inset:0;width:1280px;height:720px}
+  .hud{position:absolute;color:#fff;font-weight:900;letter-spacing:.02em;text-shadow:0 3px 0 rgba(0,0,0,.35)}
+  #roundTag{left:28px;top:24px;background:rgba(10,14,30,.72);padding:10px 18px;border-radius:12px;font-size:22px;border:2px solid rgba(255,214,10,.8)}
+  #score{right:28px;top:24px;background:rgba(10,14,30,.72);padding:10px 18px;border-radius:12px;font-size:22px;text-align:right}
+  #score b{color:#FFD60A}
+  #timerWrap{left:50%;bottom:30px;transform:translateX(-50%);width:520px;height:58px;background:rgba(10,14,30,.72);border-radius:16px;overflow:hidden}
+  #timerBar{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#FFD60A,#ff8a00)}
+  #timerNum{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:30px;color:#fff}
+  #card{left:0;right:0;top:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none}
+  #cardMain{font-size:118px;line-height:1;color:#fff;-webkit-text-stroke:3px #111;text-shadow:0 8px 0 #111,0 14px 30px rgba(0,0,0,.5)}
+  #cardMain .y{color:#FFD60A}
+  #cardSub{margin-top:22px;font-size:32px;font-weight:800;background:#111;color:#fff;padding:10px 22px;border-radius:12px;text-shadow:none}
+  #callouts{position:absolute;inset:0}
+  .co{position:absolute;font-size:24px;font-weight:900;color:#111;background:#FFD60A;padding:8px 14px;border-radius:10px;white-space:nowrap;box-shadow:0 6px 0 #111;border:3px solid #111}
+  .co .n{display:inline-block;background:#111;color:#FFD60A;border-radius:6px;padding:0 8px;margin-right:8px}
+  .dot{position:absolute;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:#FFD60A;border:3px solid #111}
+  svg{position:absolute;inset:0}
+  #reveal{left:0;right:0;bottom:70px;text-align:center}
+  #revName{font-size:96px;color:#FFD60A;-webkit-text-stroke:3px #111;text-shadow:0 7px 0 #111}
+  #revInfo{display:inline-block;margin-top:10px;font-size:30px;background:#111;padding:8px 20px;border-radius:12px;text-shadow:none}
+  #revInfo b{color:#7CFF6B}
+  #flash{position:absolute;inset:0;background:#fff;pointer-events:none}
+  #vignette{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(0,0,0,.45) 100%)}
+</style></head>
+<body>
+<canvas id="c" width="1280" height="720"></canvas>
+<div id="vignette"></div>
+<svg id="lines" width="1280" height="720"></svg>
+<div id="callouts"></div>
+<div id="roundTag" class="hud"></div>
+<div id="score" class="hud"></div>
+<div id="timerWrap" class="hud"><div id="timerBar"></div><div id="timerNum"></div></div>
+<div id="reveal" class="hud"><div id="revName"></div><div id="revInfo"></div></div>
+<div id="card" class="hud"><div id="cardMain"></div><div id="cardSub"></div></div>
+<div id="flash"></div>
+<script src="node_modules/topojson-client/dist/topojson-client.min.js"></script>
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ---------- utils ----------
+let _s = 1;
+const seed = n => { _s = n >>> 0; };
+const rnd = () => { _s |= 0; _s = _s + 0x6D2B79F5 | 0; let t = Math.imul(_s ^ _s >>> 15, 1 | _s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+const R = (a, b) => a + (b - a) * rnd();
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const lin = (t, a, b) => clamp((t - a) / (b - a));
+const eio = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const eout = x => 1 - Math.pow(1 - x, 3);
+const back = x => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+// fade in at a, out at b
+const win = (t, a, b, f = .25) => Math.min(lin(t, a, a + f), 1 - lin(t, b - f, b));
+
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(1280, 720, false);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+
+const M = {};
+const mat = (c, o = {}) => { const k = c + JSON.stringify(o); return M[k] || (M[k] = new THREE.MeshStandardMaterial({ color: c, roughness: .9, flatShading: true, ...o })); };
+function mesh(geo, c, o) { const m = new THREE.Mesh(geo, typeof c === 'string' || typeof c === 'number' ? mat(c, o) : c); m.castShadow = true; m.receiveShadow = true; return m; }
+const box = (w, h, d, c, o) => mesh(new THREE.BoxGeometry(w, h, d), c, o);
+const at = (m, x, y, z) => { m.position.set(x, y, z); return m; };
+
+function gradTex(top, bot) {
+  const cv = document.createElement('canvas'); cv.width = 4; cv.height = 256;
+  const g = cv.getContext('2d'); const gr = g.createLinearGradient(0, 0, 0, 256);
+  gr.addColorStop(0, top); gr.addColorStop(.62, bot); gr.addColorStop(1, bot);
+  g.fillStyle = gr; g.fillRect(0, 0, 4, 256);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+function textTex(w, h, draw) {
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h; draw(cv.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+}
+
+// ---------- common street pieces ----------
+function ground(g, c, w = 800, x = 0) { const m = mesh(new THREE.PlaneGeometry(w, 800), c); m.rotation.x = -Math.PI / 2; m.position.set(x, 0, -300); m.castShadow = false; g.add(m); return m; }
+function road(g, w, c, x = 0) { const m = box(w, .04, 520, c); m.position.set(x, .02, -240); m.castShadow = false; g.add(m); }
+function solid(g, x, c, w = .14) { const m = box(w, .02, 520, c, { roughness: .6 }); m.position.set(x, .05, -240); m.castShadow = false; g.add(m); }
+function dashed(g, x, c, dash = 3, gap = 6, w = .14) {
+  for (let z = 20; z > -300; z -= dash + gap) { const m = box(w, .02, dash, c, { roughness: .6 }); m.position.set(x, .05, z); m.castShadow = false; g.add(m); }
+}
+function tree(g, x, z, s = 1, c = '#3f7a35') {
+  const t = mesh(new THREE.CylinderGeometry(.15 * s, .22 * s, 2.2 * s, 6), '#6b4a2e'); at(t, x, 1.1 * s, z); g.add(t);
+  const c1 = mesh(new THREE.IcosahedronGeometry(1.5 * s, 0), c); at(c1, x, 2.9 * s, z); c1.rotation.set(rnd() * 3, rnd() * 3, 0); g.add(c1);
+}
+function pine(g, x, z, s = 1) {
+  const t = mesh(new THREE.CylinderGeometry(.12 * s, .18 * s, 1.4 * s, 5), '#5a3e28'); at(t, x, .7 * s, z); g.add(t);
+  for (let i = 0; i < 3; i++) { const c = mesh(new THREE.ConeGeometry((1.6 - i * .4) * s, 2 * s, 7), '#2f5a34'); at(c, x, (1.8 + i * 1.1) * s, z); g.add(c); }
+}
+function house(g, x, z, w, h, d, wall, roof, rotY = 0) {
+  const grp = new THREE.Group();
+  grp.add(at(box(w, h, d, wall), 0, h / 2, 0));
+  const r = mesh(new THREE.ConeGeometry(Math.max(w, d) * .78, h * .6, 4), roof); r.rotation.y = Math.PI / 4; r.scale.set(w / Math.max(w, d), 1, d / Math.max(w, d)); at(r, 0, h + h * .3, 0); grp.add(r);
+  // windows
+  for (let i = -1; i <= 1; i += 2) { const win_ = box(.9, .9, .05, '#233040', { roughness: .2, metalness: .3 }); at(win_, i * w * .25, h * .6, d / 2 + .03); grp.add(win_); }
+  grp.position.set(x, 0, z); grp.rotation.y = rotY; g.add(grp); return grp;
+}
+function car(g, x, z, body = '#e9e9e9', rotY = 0) {
+  const grp = new THREE.Group();
+  grp.add(at(box(1.7, .7, 3.8, body, { roughness: .35, metalness: .4 }), 0, .65, 0));
+  grp.add(at(box(1.5, .6, 2, '#1e2a36', { roughness: .15, metalness: .6 }), 0, 1.25, -.2));
+  for (const [wx, wz] of [[-.85, 1.2], [.85, 1.2], [-.85, -1.2], [.85, -1.2]]) { const w = mesh(new THREE.CylinderGeometry(.36, .36, .25, 10), '#151515'); w.rotation.z = Math.PI / 2; at(w, wx, .36, wz); grp.add(w); }
+  grp.add(at(box(.35, .18, .05, '#ff3030', { emissive: '#aa0000' }), -.6, .75, 1.92)); grp.add(at(box(.35, .18, .05, '#ff3030', { emissive: '#aa0000' }), .6, .75, 1.92));
+  grp.position.set(x, 0, z); grp.rotation.y = rotY; g.add(grp); return grp;
+}
+function mountain(g, x, z, r, h, c = '#6c7a72', snow = true) {
+  const m = mesh(new THREE.ConeGeometry(r, h, 7), c); at(m, x, h / 2 - 1, z); m.rotation.y = rnd() * 3; m.castShadow = false; g.add(m);
+  if (snow) { const s = mesh(new THREE.ConeGeometry(r * .34, h * .34, 7), '#f4f7fa'); at(s, x, h - 1 - h * .17 + .05, z); s.rotation.y = m.rotation.y; s.castShadow = false; g.add(s); }
+}
+
+// ---------- the five worlds ----------
+const ROUNDS = [];
+
+ROUNDS.push({
+  name: 'JAPAN', iso: '392', lat: 36.2, lon: 138.25, lane: -1.5, km: '3 km away', pts: 5000,
+  sky: ['#6fb3ff', '#e7f3ff'], fog: '#dcebf7', sun: [-30, 40, 20], sunI: 2.6,
+  build(g) {
+    seed(11);
+    ground(g, '#7c8c5c'); road(g, 6.4, '#3b3d40');
+    solid(g, -3, '#f2f2f2'); solid(g, 3, '#f2f2f2'); solid(g, 0, '#f3c316', .16);
+    // sidewalk curbs
+    for (const s of [-1, 1]) { const c = box(1.2, .15, 520, '#a9a9a2'); at(c, s * 3.8, .08, -240); c.castShadow = false; g.add(c); }
+    // houses
+    for (let z = 10; z > -170; z -= R(6.5, 9)) for (const s of [-1, 1]) {
+      const cols = ['#e8e2d4', '#d9d4c7', '#c9cfd2', '#efe9df', '#b9b2a6'];
+      house(g, s * R(8, 10), z, R(5, 7), R(3.2, 5.5), R(5, 6.5), cols[Math.floor(rnd() * 5)], s < 0 ? '#3a4652' : '#4a4a52');
+    }
+    // concrete utility poles + wires
+    const tops = [];
+    for (let z = 12; z > -200; z -= 9) {
+      const p = mesh(new THREE.CylinderGeometry(.13, .19, 8.5, 8), '#a3a39c'); at(p, -4.2, 4.25, z); g.add(p);
+      const cb = box(1.8, .12, .12, '#8f8f88'); at(cb, -4.2, 7.6, z); g.add(cb);
+      const tr = mesh(new THREE.CylinderGeometry(.28, .28, .7, 8), '#7f8a8f'); at(tr, -3.9, 6.7, z); if ((z | 0) % 2 === 0) g.add(tr);
+      tops.push(z);
+    }
+    const wm = new THREE.LineBasicMaterial({ color: '#1b1b1b' });
+    for (const [dx, dy] of [[-.8, 7.65], [0, 7.65], [.8, 7.65], [.3, 6.9], [-.4, 6.3]]) {
+      for (let i = 0; i < tops.length - 1; i++) {
+        const pts = []; for (let k = 0; k <= 8; k++) { const f = k / 8; pts.push(new THREE.Vector3(-4.2 + dx, dy - Math.sin(f * Math.PI) * .45, tops[i] + (tops[i + 1] - tops[i]) * f)); }
+        g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), wm));
+      }
+    }
+    // vending machines
+    for (const z of [-11, -48]) {
+      const vm = new THREE.Group();
+      vm.add(at(box(.8, 1.85, 1.1, '#f5f7fa', { roughness: .4 }), 0, .93, 0));
+      vm.add(at(box(.04, 1.1, .9, '#bfe3ff', { emissive: '#7fc4ff', emissiveIntensity: .9 }), .42, 1.15, 0));
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) vm.add(at(box(.05, .18, .12, ['#e33', '#3a7', '#fc3', '#36c'][c], { emissive: ['#a11', '#174', '#a80', '#139'][c] }), .45, .8 + r * .3, -.33 + c * .22));
+      vm.position.set(-4.4, 0, z); g.add(vm);
+    }
+    // parked kei-car on the LEFT
+    car(g, -1.6, -26, '#f4f4f4', Math.PI); car(g, 1.6, -70, '#2d5aa6', 0);
+    // blue direction sign
+    const sp = mesh(new THREE.CylinderGeometry(.08, .08, 5.5, 6), '#9aa'); at(sp, 4.2, 2.75, -38); g.add(sp);
+    const st = textTex(512, 256, (c, w, h) => { c.fillStyle = '#1756b8'; c.fillRect(0, 0, w, h); c.strokeStyle = '#fff'; c.lineWidth = 10; c.strokeRect(10, 10, w - 20, h - 20); c.fillStyle = '#fff'; c.beginPath(); c.moveTo(256, 40); c.lineTo(300, 110); c.lineTo(270, 110); c.lineTo(270, 220); c.lineTo(242, 220); c.lineTo(242, 110); c.lineTo(212, 110); c.fill(); c.fillRect(270, 150, 170, 26); c.font = '900 54px IPAGothic'; c.fillText('20', 70, 160); });
+    const sg = new THREE.Mesh(new THREE.BoxGeometry(3, 1.5, .08), [mat('#1756b8'), mat('#1756b8'), mat('#1756b8'), mat('#1756b8'), new THREE.MeshStandardMaterial({ map: st }), mat('#1756b8')]);
+    at(sg, 3.4, 5.2, -38); g.add(sg);
+    // green hills
+    for (let i = 0; i < 14; i++) { const h = mesh(new THREE.IcosahedronGeometry(R(25, 45), 1), '#4e7a45'); h.scale.y = R(.5, .8); at(h, (i % 2 ? 1 : -1) * R(40, 110), -6, -R(140, 260)); h.castShadow = false; g.add(h); }
+  },
+  clues: [
+    { t: 4, text: 'Cars drive on the LEFT', a: [-1.6, 1.3, -26] },
+    { t: 6.5, text: 'Concrete poles + tangled wires', a: [-4.2, 7.6, -30] },
+    { t: 9, text: 'Vending machine on the street', a: [-4.4, 1.4, -11] },
+  ]
+});
+
+ROUNDS.push({
+  name: 'KENYA', iso: '404', lat: 0.4, lon: 37.9, lane: -1.7, km: '140 km away', pts: 4780,
+  sky: ['#4a9bf0', '#f6e7c8'], fog: '#efdcb8', sun: [3, 60, 4], sunI: 3.2,
+  build(g) {
+    seed(22);
+    ground(g, '#b4562d');
+    road(g, 7, '#9c4a2a');
+    for (const x of [-1.8, 1.8]) { const t = box(.9, .045, 520, '#86391f'); at(t, x, .03, -240); t.castShadow = false; g.add(t); }
+    // grass tufts
+    const tuftGeo = new THREE.ConeGeometry(.35, .7, 4);
+    for (let i = 0; i < 260; i++) { const x = (rnd() < .5 ? -1 : 1) * R(4.2, 60); const m = mesh(tuftGeo, rnd() < .5 ? '#c9a94a' : '#a8953e'); at(m, x, .3, R(15, -200)); m.castShadow = false; g.add(m); }
+    // acacias
+    const acacia = (x, z, s) => {
+      const t = mesh(new THREE.CylinderGeometry(.12 * s, .22 * s, 4 * s, 6), '#4a3323'); at(t, x, 2 * s, z); t.rotation.z = R(-.15, .15); g.add(t);
+      for (let k = 0; k < 2; k++) { const b = mesh(new THREE.CylinderGeometry(.06 * s, .1 * s, 1.8 * s, 5), '#4a3323'); at(b, x + (k ? .5 : -.5) * s, 3.9 * s, z); b.rotation.z = k ? -.7 : .7; g.add(b); }
+      const c = mesh(new THREE.IcosahedronGeometry(3.2 * s, 1), '#4f6a2a'); c.scale.set(1.15, .22, 1); at(c, x, 4.6 * s, z); g.add(c);
+    };
+    acacia(-10, -20, 1.1); acacia(12, -17, 1);
+    for (let i = 0; i < 34; i++) acacia((rnd() < .5 ? -1 : 1) * R(9, 80), R(5, -220), R(.8, 1.3));
+    // distant hills
+    for (let i = 0; i < 9; i++) { const h = mesh(new THREE.ConeGeometry(R(40, 80), R(10, 22), 6), '#8a8f9c'); at(h, R(-200, 200), 0, -R(220, 300)); h.castShadow = false; g.add(h); }
+    car(g, -1.8, -34, '#f2f2f2', Math.PI);
+    // termite mound
+    const tm = mesh(new THREE.ConeGeometry(.7, 2.4, 6), '#a2482a'); at(tm, 6, 1.2, -9); g.add(tm);
+  },
+  clues: [
+    { t: 4, text: 'Deep red laterite soil', a: [5, .1, -11] },
+    { t: 6.5, text: 'Flat-topped acacia trees', a: [-10, 5, -20] },
+    { t: 9, text: 'Tiny shadows = sun overhead = Equator', a: [12, .2, -17] },
+  ]
+});
+
+ROUNDS.push({
+  name: 'NORWAY', iso: '578', lat: 61.2, lon: 7.0, lane: 1.6, km: '9 km away', pts: 4991,
+  sky: ['#8aa4bb', '#dfe6ea'], fog: '#cfd8de', sun: [40, 25, -30], sunI: 1.8,
+  build(g) {
+    seed(33);
+    ground(g, '#4f6b3a', 400, 194); // land right of x=-6
+    const wtr = mesh(new THREE.PlaneGeometry(500, 800), '#2b5670', { roughness: .15, metalness: .35, flatShading: false }); wtr.rotation.x = -Math.PI / 2; at(wtr, -256, -.25, -300); wtr.castShadow = false; g.add(wtr);
+    const bank = box(3, .6, 520, '#5e5a52'); at(bank, -6.5, -.1, -240); bank.castShadow = false; g.add(bank);
+    road(g, 6.6, '#38393b'); solid(g, -3.1, '#eee'); solid(g, 3.1, '#eee'); dashed(g, 0, '#f2c200', 3, 9, .15);
+    for (let z = 10; z > -200; z -= 12) for (const s of [-1, 1]) {
+      const p = mesh(new THREE.CylinderGeometry(.07, .07, 1, 6), '#141414'); at(p, s * 3.7, .5, z); g.add(p);
+      const r = box(.09, .22, .1, '#ffc400', { emissive: '#7a5a00' }); at(r, s * 3.7, .82, z + .05); g.add(r);
+    }
+    for (let i = 0; i < 22; i++) mountain(g, -R(50, 160), -R(20, 280), R(28, 55), R(45, 95), '#5d6b62');
+    for (let i = 0; i < 10; i++) mountain(g, R(60, 160), -R(60, 280), R(30, 50), R(50, 90), '#55664f');
+    const rh = (x, z, rot) => { const h = house(g, x, z, 6, 3.6, 5, '#a3242a', '#2b2b2b', rot); for (const sx of [-3, 3]) h.add(at(box(.25, 3.6, .25, '#f2f2f2'), sx, 1.8, 2.5)); };
+    rh(10, -22, -.2); rh(15, -38, .1); rh(9, -64, -.15); rh(-12.5, -90, .3);
+    for (let i = 0; i < 70; i++) pine(g, R(7, 40), R(10, -200), R(.9, 1.6));
+  },
+  clues: [
+    { t: 4, text: 'Yellow centre line (Sweden = white!)', a: [0, .05, -14] },
+    { t: 6.5, text: 'Black posts, yellow reflectors', a: [3.7, .9, -26] },
+    { t: 9, text: 'Red wooden houses on a fjord', a: [10, 4, -22] },
+  ]
+});
+
+ROUNDS.push({
+  name: 'USA', sub: 'ARIZONA', iso: '840', lat: 33.6, lon: -111.6, lane: 1.9, km: '4 km away', pts: 4996,
+  sky: ['#2f86ea', '#f3dcb4'], fog: '#ecd4ad', sun: [-35, 35, 10], sunI: 3,
+  build(g) {
+    seed(44);
+    ground(g, '#c8a16b'); road(g, 8.2, '#46413c');
+    solid(g, -.17, '#f5c400', .13); solid(g, .17, '#f5c400', .13); solid(g, -3.8, '#f2f2f2'); solid(g, 3.8, '#f2f2f2');
+    const sag = (x, z, s) => {
+      const c = '#4c7a3e';
+      g.add(at(mesh(new THREE.CylinderGeometry(.42 * s, .48 * s, 7 * s, 9), c), x, 3.5 * s, z));
+      g.add(at(mesh(new THREE.SphereGeometry(.42 * s, 9, 6), c), x, 7 * s, z));
+      for (const [d, h, l] of [[1, 3.2, 2.2], [-1, 4.2, 1.8]]) {
+        const hz = mesh(new THREE.CylinderGeometry(.27 * s, .27 * s, 1.1 * s, 8), c); hz.rotation.z = Math.PI / 2; at(hz, x + d * .7 * s, h * s, z); g.add(hz);
+        g.add(at(mesh(new THREE.CylinderGeometry(.27 * s, .27 * s, l * s, 8), c), x + d * 1.2 * s, (h + l / 2) * s, z));
+        g.add(at(mesh(new THREE.SphereGeometry(.27 * s, 8, 5), c), x + d * 1.2 * s, (h + l) * s, z));
+      }
+    };
+    sag(7.5, -14, 1);
+    for (let i = 0; i < 40; i++) sag((rnd() < .5 ? -1 : 1) * R(8, 70), R(10, -220), R(.6, 1.2));
+    for (let i = 0; i < 200; i++) { const b = mesh(new THREE.IcosahedronGeometry(R(.3, .7), 0), rnd() < .5 ? '#7d7f45' : '#8f8a52'); at(b, (rnd() < .5 ? -1 : 1) * R(5, 60), .2, R(15, -200)); b.castShadow = false; g.add(b); }
+    for (let i = 0; i < 12; i++) { const w = R(30, 80), h = R(18, 40); const m = mesh(new THREE.CylinderGeometry(w * .8, w, h, 7), '#a8553a'); at(m, R(-220, 220), h / 2, -R(140, 300)); m.castShadow = false; g.add(m); }
+    // wooden poles left
+    for (let z = 14; z > -200; z -= 14) { g.add(at(mesh(new THREE.CylinderGeometry(.12, .16, 8, 6), '#6e5236'), -7, 4, z)); g.add(at(box(2.2, .14, .14, '#6e5236'), -7, 7.4, z)); }
+    // green sign gantry
+    const tex = textTex(1024, 384, (c, w, h) => { c.fillStyle = '#0f6b3a'; c.fillRect(0, 0, w, h); c.strokeStyle = '#fff'; c.lineWidth = 12; c.strokeRect(16, 16, w - 32, h - 32); c.fillStyle = '#fff'; c.font = '700 120px Inter'; c.textAlign = 'center'; c.fillText('EXIT 214', w / 2, 170); c.font = '600 90px Inter'; c.fillText('1 MILE', w / 2, 300); });
+    const sgn = new THREE.Mesh(new THREE.BoxGeometry(5.6, 2.1, .12), [mat('#0f6b3a'), mat('#0f6b3a'), mat('#0f6b3a'), mat('#0f6b3a'), new THREE.MeshStandardMaterial({ map: tex }), mat('#0f6b3a')]);
+    at(sgn, 4.5, 6.2, -42); sgn.castShadow = true; g.add(sgn);
+    for (const x of [2.2, 6.8]) g.add(at(mesh(new THREE.CylinderGeometry(.12, .12, 6.2, 8), '#9aa3a8'), x, 3.1, -42.1));
+    car(g, -1.9, -60, '#b23a2e', 0);
+  },
+  clues: [
+    { t: 4, text: 'Double yellow centre line', a: [0, .05, -13] },
+    { t: 6.5, text: 'Saguaro: only grows in the Sonoran Desert', a: [7.5, 5, -14] },
+    { t: 9, text: 'Green highway sign in miles', a: [4.5, 6.2, -42] },
+  ]
+});
+
+ROUNDS.push({
+  name: 'NETHERLANDS', iso: '528', lat: 52.1, lon: 5.3, lane: 1.2, km: '1 km away', pts: 5000,
+  sky: ['#7d9fc0', '#e4ebf0'], fog: '#d7e0e7', sun: [30, 30, 25], sunI: 2.2,
+  build(g) {
+    seed(55);
+    ground(g, '#6f9a48'); road(g, 5, '#4a4b4e'); solid(g, -2.4, '#f2f2f2', .1); solid(g, 2.4, '#f2f2f2', .1);
+    const bl = box(2.2, .05, 520, '#a5412f'); at(bl, 4.6, .03, -240); bl.castShadow = false; g.add(bl);
+    // canal
+    const can = mesh(new THREE.PlaneGeometry(6, 800), '#3c5f74', { roughness: .1, metalness: .4, flatShading: false }); can.rotation.x = -Math.PI / 2; at(can, -7.5, .02, -300); can.castShadow = false; g.add(can);
+    // side road + shark teeth at z=-20
+    const sr = box(30, .04, 5, '#4a4b4e'); at(sr, 18, .021, -20); sr.castShadow = false; g.add(sr);
+    const triG = new THREE.ConeGeometry(.5, .7, 3);
+    for (let i = 0; i < 5; i++) { const tri = mesh(triG, '#ffffff', { emissive: '#666' }); tri.scale.y = .03; tri.rotation.y = Math.PI / 6; at(tri, .3 + i * .5, .06, -17.2); tri.castShadow = false; g.add(tri); }
+    // windmill
+    const wm = new THREE.Group();
+    wm.add(at(mesh(new THREE.CylinderGeometry(2.2, 4, 14, 8), '#6b5640'), 0, 7, 0));
+    wm.add(at(mesh(new THREE.ConeGeometry(2.8, 3, 8), '#3a3a3a'), 0, 15.5, 0));
+    const sails = new THREE.Group(); sails.position.set(0, 14.5, 3);
+    for (let i = 0; i < 4; i++) { const s = new THREE.Group(); s.rotation.z = i * Math.PI / 2; s.add(at(box(.3, 10, .2, '#4b3a2a'), 0, 5, 0)); s.add(at(box(1.6, 8, .1, '#e9e2d0'), .9, 5.8, 0)); sails.add(s); }
+    wm.add(sails); wm.position.set(-26, 0, -62); wm.rotation.y = .5; g.add(wm); this.sails = sails;
+    for (let i = 0; i < 9; i++) house(g, R(12, 15), -40 - i * 7.5, 6, R(5, 7), 6.5, ['#7a3a2a', '#6b3326', '#8a4532'][i % 3], '#2f2f33', -Math.PI / 2);
+    for (let z = 6; z > -200; z -= 8) { const p = mesh(new THREE.IcosahedronGeometry(1.3, 1), '#3f6e33'); p.scale.set(1, 3.2, 1); at(p, -11.5, 4.5, z); g.add(p); g.add(at(mesh(new THREE.CylinderGeometry(.15, .2, 1.6, 5), '#5a4128'), -11.5, .8, z)); }
+    car(g, -1.2, -38, '#3d3f44', Math.PI);
+  },
+  clues: [
+    { t: 4, text: 'Red asphalt bike lane', a: [4.6, .05, -13] },
+    { t: 6.5, text: 'Shark-teeth give-way markings', a: [1.3, .06, -17.2] },
+    { t: 9, text: 'Pancake flat + canal + windmill', a: [-26, 12, -62] },
+  ]
+});
+
+// build street scenes
+const street = new THREE.Scene();
+const scam = new THREE.PerspectiveCamera(62, 1280 / 720, .1, 900);
+const hemi = new THREE.HemisphereLight('#ffffff', '#776655', 1.1); street.add(hemi);
+const sun = new THREE.DirectionalLight('#fff3dd', 2.5); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 220 }); sun.shadow.bias = -.0004;
+street.add(sun); street.add(sun.target);
+ROUNDS.forEach(r => { r.group = new THREE.Group(); r.build(r.group); r.group.visible = false; street.add(r.group); r.skyTex = gradTex(r.sky[0], r.sky[1]); });
+
+// ---------- globe ----------
+const globeScene = new THREE.Scene();
+const gcam = new THREE.PerspectiveCamera(40, 1280 / 720, .1, 1000);
+globeScene.add(new THREE.AmbientLight('#8899bb', 1.1));
+const gl = new THREE.DirectionalLight('#ffffff', 2.4); gl.position.set(-4, 3, 6); globeScene.add(gl);
+seed(99);
+{ const sg = new THREE.BufferGeometry(); const p = []; for (let i = 0; i < 2500; i++) { const v = new THREE.Vector3(R(-1, 1), R(-1, 1), R(-1, 1)).normalize().multiplyScalar(R(150, 400)); p.push(v.x, v.y, v.z); } sg.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); globeScene.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: '#cfd8ff', size: 1.1, sizeAttenuation: false }))); }
+globeScene.background = new THREE.Color('#050816');
+
+const world = await (await fetch('node_modules/world-atlas/countries-50m.json')).json();
+const feats = topojson.feature(world, world.objects.countries).features;
+function drawGlobeTex(hl) {
+  const W = 4096, H = 2048; const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const c = cv.getContext('2d');
+  const og = c.createLinearGradient(0, 0, 0, H); og.addColorStop(0, '#0c3a6b'); og.addColorStop(.5, '#1662a8'); og.addColorStop(1, '#0c3a6b');
+  c.fillStyle = og; c.fillRect(0, 0, W, H);
+  const P = (lon, lat) => [(lon + 180) / 360 * W, (90 - lat) / 180 * H];
+  const ringPath = (ring, off) => { let prev = null, lon0; ring.forEach(([lo, la], i) => { if (prev !== null) { while (lo - prev > 180) lo -= 360; while (lo - prev < -180) lo += 360; } prev = lo; const [x, y] = P(lo, la); i ? c.lineTo(x + off, y) : c.moveTo(x + off, y); }); c.closePath(); };
+  for (const f of feats) {
+    if (f.id === '010') continue;
+    const polys = f.geometry ? (f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates) : [];
+    const isH = hl.includes(f.id);
+    c.fillStyle = isH ? '#FFD60A' : '#6fae5e'; c.strokeStyle = isH ? '#ff8a00' : 'rgba(20,50,20,.55)'; c.lineWidth = isH ? 5 : 1.6;
+    for (const off of [-W, 0, W]) { c.beginPath(); for (const poly of polys) for (const ring of poly) ringPath(ring, off); c.fill('evenodd'); c.stroke(); }
+  }
+  c.fillStyle = '#eef3f7'; c.fillRect(0, H * (155 / 180), W, H);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+}
+const baseTex = drawGlobeTex([]);
+ROUNDS.forEach(r => r.gTex = drawGlobeTex([r.iso]));
+const allTex = drawGlobeTex(ROUNDS.map(r => r.iso));
+const globe = new THREE.Mesh(new THREE.SphereGeometry(2, 128, 96), new THREE.MeshStandardMaterial({ map: baseTex, roughness: .75, metalness: 0 }));
+globeScene.add(globe);
+const atm = new THREE.Mesh(new THREE.SphereGeometry(2.25, 64, 48), new THREE.ShaderMaterial({
+  transparent: true, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false,
+  vertexShader: 'varying vec3 n; void main(){ n=normalize(normalMatrix*normal); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }',
+  fragmentShader: 'varying vec3 n; void main(){ float i=pow(0.72-dot(n,vec3(0,0,1.)),3.); gl_FragColor=vec4(0.35,0.65,1.,1.)*i*1.6; }'
+}));
+globeScene.add(atm);
+const ll2v = (lat, lon, r) => { const phi = (lon + 180) * Math.PI / 180, th = (90 - lat) * Math.PI / 180; return new THREE.Vector3(-r * Math.cos(phi) * Math.sin(th), r * Math.cos(th), r * Math.sin(phi) * Math.sin(th)); };
+function makePin() {
+  const p = new THREE.Group();
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(.012, .012, .35, 8), new THREE.MeshStandardMaterial({ color: '#eeeeee' })); stem.position.y = .175; p.add(stem);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.07, 16, 12), new THREE.MeshStandardMaterial({ color: '#ff2d55', emissive: '#7a0018', roughness: .3 })); head.position.y = .38; p.add(head);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(.05, .09, 32), new THREE.MeshBasicMaterial({ color: '#ff2d55', transparent: true, side: THREE.DoubleSide })); ring.rotation.x = -Math.PI / 2; ring.position.y = .01; p.add(ring); p.userData.ring = ring;
+  return p;
+}
+ROUNDS.forEach(r => { const pin = makePin(); const v = ll2v(r.lat, r.lon, 2); pin.position.copy(v); pin.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v.clone().normalize()); pin.visible = false; globe.add(pin); r.pin = pin; });
+const target = (lat, lon) => ({ x: lat * Math.PI / 180, y: Math.PI / 2 - (lon + 180) * Math.PI / 180 });
+
+// ---------- HUD ----------
+const $ = id => document.getElementById(id);
+const coEls = [0, 1, 2].map(() => { const d = document.createElement('div'); d.className = 'co'; $('callouts').appendChild(d); const dot = document.createElement('div'); dot.className = 'dot'; $('callouts').appendChild(dot); return { d, dot }; });
+const lineEls = [0, 1, 2].map(() => { const l = document.createElementNS('http://www.w3.org/2000/svg', 'line'); l.setAttribute('stroke', '#111'); l.setAttribute('stroke-width', '5'); const l2 = document.createElementNS('http://www.w3.org/2000/svg', 'line'); l2.setAttribute('stroke', '#FFD60A'); l2.setAttribute('stroke-width', '2.5'); $('lines').appendChild(l); $('lines').appendChild(l2); return [l, l2]; });
+const coPos = [[60, 150], [60, 240], [60, 330]];
+const fmt = n => Math.round(n).toLocaleString('en-US');
+const cum = []; ROUNDS.reduce((a, r, i) => (cum[i] = a + r.pts), 0);
+
+function card(main, sub, op, scale = 1, y = 0) {
+  $('card').style.opacity = op; $('cardMain').innerHTML = main; $('cardSub').textContent = sub || ''; $('cardSub').style.display = sub ? 'block' : 'none';
+  $('cardMain').style.transform = `translateY(${y}px) scale(${scale})`;
+}
+function hideCallouts() { coEls.forEach(e => { e.d.style.opacity = 0; e.dot.style.opacity = 0; }); lineEls.forEach(l => l.forEach(x => x.setAttribute('opacity', 0))); }
+
+// ---------- street rendering ----------
+let curR = -1;
+function showStreet(i, s, opts = {}) {
+  if (curR !== i) { ROUNDS.forEach((r, k) => r.group.visible = k === i); curR = i; }
+  const r = ROUNDS[i];
+  street.background = r.skyTex; street.fog = new THREE.Fog(r.fog, 40, opts.far || 330);
+  sun.intensity = r.sunI;
+  const z = 8 - s * 1.05;
+  const crane = opts.crane ? eio(lin(s, 0, 2.8)) : 1;
+  const y = 1.65 + (1 - crane) * 9;
+  const sway = Math.sin(s * .45) * 2.2 + (opts.yaw || 0);
+  scam.position.set(r.lane + Math.sin(s * .7) * .05, y + Math.sin(s * 3.1) * .015, z + (1 - crane) * 10);
+  scam.lookAt(r.lane + sway, 1.3 - (1 - crane) * 1.5, z - 22);
+  scam.fov = 62 - (opts.punch || 0) * 8; scam.updateProjectionMatrix();
+  sun.position.set(scam.position.x + r.sun[0], r.sun[1], scam.position.z + r.sun[2]);
+  sun.target.position.set(scam.position.x, 0, scam.position.z - 20);
+  if (r.sails) r.sails.rotation.z = -s * .9;
+  renderer.render(street, scam);
+}
+function drawCallouts(i, s, op) {
+  const r = ROUNDS[i];
+  r.clues.forEach((c, k) => {
+    const a = op * lin(s, c.t, c.t + .25);
+    const e = coEls[k], L = lineEls[k];
+    if (a <= 0) { e.d.style.opacity = 0; e.dot.style.opacity = 0; L.forEach(x => x.setAttribute('opacity', 0)); return; }
+    const v = new THREE.Vector3(...c.a).project(scam);
+    let px = (v.x + 1) / 2 * 1280, py = (1 - v.y) / 2 * 720;
+    const vis = v.z < 1 && px > -50 && px < 1330 && py > -50 && py < 770;
+    const pop = back(lin(s, c.t, c.t + .35));
+    e.d.innerHTML = `<span class="n">${k + 1}</span>${c.text}`;
+    const right = px > 640 && c.a[0] > 0;
+    const lx = right ? 1280 - 60 - e.d.offsetWidth : coPos[k][0], ly = coPos[k][1] - 24 + 0 ;
+    e.d.style.left = lx + 'px'; e.d.style.top = (ly) + 'px';
+    e.d.style.opacity = a; e.d.style.transform = `scale(${pop})`; e.d.style.transformOrigin = right ? 'right center' : 'left center';
+    e.dot.style.opacity = vis ? a : 0; e.dot.style.left = px + 'px'; e.dot.style.top = py + 'px';
+    const ax = right ? lx : lx + e.d.offsetWidth, ay = ly + e.d.offsetHeight / 2;
+    L.forEach(x => { x.setAttribute('x1', ax); x.setAttribute('y1', ay); x.setAttribute('x2', px); x.setAttribute('y2', py); x.setAttribute('opacity', vis ? a : 0); });
+  });
+}
+
+// ---------- globe rendering ----------
+function renderGlobe(rot, camZ, tex, camY = 0) {
+  globe.material.map = tex; globe.rotation.set(rot.x, rot.y, 0, 'XYZ');
+  gcam.position.set(0, camY, camZ); gcam.lookAt(0, 0, 0);
+  renderer.render(globeScene, gcam);
+}
+
+// ---------- master timeline ----------
+const INTRO = 10, RLEN = 20, OUT0 = INTRO + 5 * RLEN;
+window.DURATION = 120;
+window.renderAt = function (t) {
+  let flash = 0;
+  const show = (id, v) => $(id).style.display = v ? '' : 'none';
+  ROUNDS.forEach(r => r.pin.visible = false);
+  if (t < INTRO) {
+    show('roundTag', 0); show('score', 0); show('timerWrap', 0); show('reveal', 0); hideCallouts();
+    if (t < 3.6) {
+      const i = Math.floor(t / .72) % 5; const s = 3 + (t % .72) * 2.4;
+      showStreet(i, s, { yaw: (i % 2 ? 1 : -1) * 1.5, punch: (t % .72) / .72 });
+      flash = 1 - lin(t % .72, 0, .12);
+      const a = t < 1.8;
+      card(a ? '5 ROADS.' : '5 <span class="y">COUNTRIES.</span>', a ? 'One clue-packed street each' : 'Can you name them all?', 1, 1 + .06 * (1 - eout(lin(t % 1.8, 0, .3))));
+    } else {
+      const g = t - 3.6;
+      const rot = { x: .35 + Math.sin(g * .3) * .1, y: -g * (1.6 - g * .12) };
+      renderGlobe(rot, 9 - eout(lin(g, 0, 3)) * 2.4, baseTex, .3);
+      flash = 1 - lin(g, 0, .25);
+      const p = back(lin(g, .3, .8));
+      card('WHERE ON<br><span class="y">EARTH?</span>', g > 1.8 ? '10 seconds per road · clues only · keep score' : '', lin(g, .3, .5) * (1 - lin(g, 6, 6.4)), .6 + .4 * p);
+    }
+  } else if (t < OUT0) {
+    const i = Math.floor((t - INTRO) / RLEN), s = (t - INTRO) % RLEN, r = ROUNDS[i];
+    show('roundTag', 1); show('score', 1);
+    $('roundTag').textContent = `ROUND ${i + 1} / 5`;
+    const prev = i ? cum[i - 1] : 0;
+    if (s < 14.5) {
+      show('reveal', 0);
+      showStreet(i, s, { crane: true });
+      flash = 1 - lin(s, 0, .3);
+      $('score').innerHTML = `SCORE <b>${fmt(prev)}</b>`;
+      // round card
+      const cp = back(lin(s, .2, .6));
+      if (s < 2.6) card(`ROUND <span class="y">${i + 1}</span>`, ['Easy warm-up', 'Off the beaten path', 'Don\'t mix this one up', 'Big country, tiny clue', 'Final round'][i], 1 - lin(s, 2.2, 2.6), .5 + .5 * cp);
+      else if (s >= 13 && s < 14.5) { const q = back(lin(s, 13, 13.3)); card('LOCKED <span class="y">IN</span>', 'Where are we?', 1, .7 + .3 * q); }
+      else card('', '', 0);
+      // timer
+      const tl = clamp(13 - s, 0, 10);
+      show('timerWrap', s > 2.6 && s < 13.2);
+      $('timerBar').style.width = (tl / 10 * 100) + '%';
+      $('timerBar').style.background = tl < 3.5 ? 'linear-gradient(90deg,#ff3b30,#ff8a00)' : 'linear-gradient(90deg,#FFD60A,#ff8a00)';
+      $('timerNum').textContent = `0:${String(Math.ceil(tl)).padStart(2, '0')}`;
+      drawCallouts(i, s, 1 - lin(s, 12.8, 13.1));
+    } else {
+      const g = s - 14.5;
+      hideCallouts(); show('timerWrap', 0); card('', '', 0);
+      const from = i ? target(ROUNDS[i - 1].lat, ROUNDS[i - 1].lon) : { x: .3, y: 0 };
+      const to = target(r.lat, r.lon);
+      const k = eio(lin(g, 0, 2.6));
+      let dy = to.y - from.y; dy = ((dy % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) + 2 * Math.PI;
+      const rot = { x: from.x + (to.x - from.x) * k, y: from.y + dy * k };
+      r.pin.visible = g > 2.5;
+      const ps = back(lin(g, 2.5, 2.9)); r.pin.scale.setScalar(Math.max(.001, ps));
+      const rp = lin(g, 2.6, 4); r.pin.userData.ring.scale.setScalar(1 + rp * 3); r.pin.userData.ring.material.opacity = 1 - rp;
+      renderGlobe(rot, 8.5 - eio(lin(g, 1.2, 3)) * 3.4, g > 2.4 ? r.gTex : baseTex, 0);
+      flash = (1 - lin(g, 0, .25)) + (1 - lin(g, 2.5, 2.8)) * .6 * (g > 2.5);
+      show('reveal', g > 2.7);
+      const rn = back(lin(g, 2.7, 3.05));
+      $('revName').textContent = r.name + (r.sub ? ' · ' + r.sub : ''); $('revName').style.transform = `scale(${rn})`;
+      $('revInfo').innerHTML = `Guess: ${r.km} &nbsp;·&nbsp; <b>+${fmt(r.pts)}</b>`; $('revInfo').style.opacity = lin(g, 3.2, 3.5);
+      const sc = prev + r.pts * eout(lin(g, 3.4, 4.6));
+      $('score').innerHTML = `SCORE <b>${fmt(sc)}</b>`;
+    }
+  } else {
+    const g = t - OUT0;
+    hideCallouts(); show('timerWrap', 0); show('reveal', 0); show('roundTag', 0); show('score', 0);
+    ROUNDS.forEach(r => { r.pin.visible = true; r.pin.scale.setScalar(1); r.pin.userData.ring.material.opacity = 0; });
+    const last = target(ROUNDS[4].lat, ROUNDS[4].lon);
+    renderGlobe({ x: .55 - eio(lin(g, 0, 3)) * .25, y: last.y + g * .55 }, 5.1 + eio(lin(g, 0, 3)) * 2.4, allTex, .2);
+    flash = 1 - lin(g, 0, .35);
+    const total = cum[4] * eout(lin(g, .6, 2.6));
+    if (g < 5.2) card(`<span class="y">${fmt(total)}</span>`, 'FINAL SCORE  /  25,000', 1 - lin(g, 4.8, 5.2), .9 + .1 * back(lin(g, .4, .8)), -40);
+    else card('YOUR <span class="y">SCORE?</span>', 'Comment how many you got · Subscribe for Round 2', lin(g, 5.2, 5.6) * (1 - lin(g, 9.6, 10)), .7 + .3 * back(lin(g, 5.2, 5.6)));
+  }
+  $('flash').style.opacity = clamp(flash) * .85;
+};
+window.READY = true;
+</script>
+</body></html>
