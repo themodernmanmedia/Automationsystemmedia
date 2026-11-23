@@ -482,3 +482,23 @@ SCENES = [
                        who("dev", "dev", -3.0, actions=[pose("wave", S(T, 1) + 0.3, S(T, 2)), walk(S(T, 2) + 0.3, d)],
                            expr=(("happy", 0),), end_x=-4.2)]}),
 ]
+
+EPISODE.update({
+    "hook": "In 2025 the typical American household earned a record $87,460, even after inflation. So why do so "
+            "many people with fresh raises feel like they're falling behind? We follow Maya and her brother Dev "
+            "through the data on real wages, money illusion and locked-in costs.",
+    "title_options": [
+        "Why Your Raise Feels Like a Pay Cut (Even When It Isn't)",
+        "Record Income, Shrinking Paychecks: The Raise Paradox Explained",
+        "Why a 5% Raise Isn't Really 5%",
+        "The Real Reason Your Raise Disappears Every Year",
+        "Inflation Is \"Cooling.\" So Why Do You Feel Poorer?",
+        "Same Raise, Completely Different Life: Why Timing Beats Income",
+        "Why Prices Never Come Back Down (And What It Does to Your Paycheck)",
+        "Money Illusion: The Mind Trick That Eats Your Raise",
+        "Why Americans Earn More but Feel Broke",
+        "How to Tell If Your Raise Is Actually a Raise",
+    ],
+    "tags": ["raise", "inflation", "real wages", "money illusion", "personal finance", "cost of living",
+             "mortgage rates", "credit card debt", "economics explained", "animated documentary"],
+})
