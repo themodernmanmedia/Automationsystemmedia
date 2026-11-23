@@ -38,6 +38,7 @@ Rotating catchphrases (reuse the winners, the way Tonka does):
 ## Production pipeline (per Short)
 1. Pick a script below (each one = one 8-second clip).
 2. Render with **Veo 3.1 Fast** on ElevenLabs at 9:16. It generates the dialogue, sound effects and laughter in the same clip. Cost: about **7.3K ElevenLabs credits (~$1.32)** per clip. Full-quality Veo 3.1 costs about 19.4K (~$3.53).
+   - Writing "9:16" in the prompt does **not** set the aspect ratio. The pilot came out 16:9. Set Aspect ratio = 9:16 on the video node in the ElevenLabs flow before running, or reframe afterwards with `make_vertical.sh`.
 3. Optional: loop the clip, add the watermark + burned captions (CapCut or ffmpeg).
 4. Post 1–3 a day. Reuse a title for each new take on a bit that hits 2× your average.
 
