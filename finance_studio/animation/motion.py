@@ -178,6 +178,7 @@ EXPRESSIONS: dict[str, dict] = {
     "confused":  dict(face=(0.08, 14, -0.025, -8, 1.0, -0.1, 0.35, 0.0), mouth="smirk", head=9),
     "worried":   dict(face=(0.045, 16, 0.045, -16, 1.02, 0.1, 0.25, 0.0), mouth="frown", head=-3),
     "surprised": dict(face=(0.11, 4, 0.11, -4, 1.22, 0.0, 0.0, 0.0), mouth="gasp", head=4),
+    "shocked":   dict(face=(0.15, 6, 0.15, -6, 1.38, -0.05, 0.05, 0.0), mouth="open", head=6),  # thumbnails
     "sad":       dict(face=(0.02, 18, 0.02, -18, 0.78, 0.1, -0.45, 0.0), mouth="frown", head=-7),
     "determined": dict(face=(-0.03, -14, -0.03, 14, 0.92, 0.3, 0.0, 0.0), mouth="rest", head=-2),
 }

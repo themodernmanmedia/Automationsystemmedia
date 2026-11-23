@@ -41,7 +41,9 @@ def setup_render(job):
     sc.render.filepath = os.path.join(job["output_dir"], "f_")
     sc.view_settings.view_transform = "Standard"
     sc.view_settings.look = "None"
-    sc.render.film_transparent = False
+    sc.render.film_transparent = bool(job.get("transparent"))
+    if job.get("transparent"):
+        sc.render.image_settings.color_mode = "RGBA"
     if sc.render.engine == "BLENDER_EEVEE":
         sc.eevee.taa_render_samples = job.get("samples", 8)
         sc.eevee.use_bloom = job.get("bloom", False)

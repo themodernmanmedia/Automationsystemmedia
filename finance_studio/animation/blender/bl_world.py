@@ -35,6 +35,8 @@ def layer(name, z, D):
 
 def build(cfg, fonts, D):
     kind = cfg.get("kind", "solid")
+    if kind == "none":
+        return
     if kind == "solid":
         bg = L.rect("bg", -60, -40, 60, 40, cfg.get("color", "#EDE6DA"), -80)
         bg.scale = (5, 5, 1)
