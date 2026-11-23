@@ -135,8 +135,8 @@ SCENES = [
                                                        pose("think", S(T, 1) + 1.6, d)],
                            expr=(("neutral", 0), ("confused", S(T, 1) + 1.6)), end_x=-3.6,
                            looks=((0, 0.3, 0), (S(T, 1) + 1.6, 0.4, 0.5)))],
-        "props": [badge("b_record", "RECORD INCOME", 1.4, 2.7, S(T, 1) + 0.2, S(T, 1) + 2.6, d),
-                  badge("b_pay", "REAL PAY -0.7%", 1.9, 1.2, S(T, 1) + 3.2, d, d, color="#E0524A")],
+        "props": [badge("b_record", "RECORD INCOME", -0.8, 2.75, S(T, 1) + 0.2, S(T, 1) + 2.6, d),
+                  badge("b_pay", "REAL PAY -0.7%", -0.1, 1.45, S(T, 1) + 3.2, d, d, color="#E0524A")],
         "sfx": [pop(S(T, 1) + 0.2), pop(S(T, 1) + 3.2)]}),
     SceneSpec("s05_realpay", "mystery", [
         "That's from the Bureau of Labor Statistics. Real pay means pay adjusted for inflation.",
@@ -152,7 +152,7 @@ SCENES = [
     SceneSpec("s06_quote", "mystery", [
         "And people feel it. When Harvard economist Stefanie Stantcheva surveyed Americans about inflation,",
         "most said they believe their wages simply don't keep up with prices.",
-    ], "manim", lambda T, d: manim("Quote", [S(T, 1) - 0.4, S(T, 1) + 0.8],
+    ], "manim", lambda T, d: manim("Quote", [0.3, S(T, 0) + 2.5],
                                    lines=["Most people believe their wages", "don't keep up with prices."],
                                    who="Stefanie Stantcheva, Harvard University",
                                    cite="\"Why Do We Dislike Inflation?\" Brookings Papers on Economic Activity, 2024")),
@@ -246,7 +246,7 @@ SCENES = [
         "Economists have a name for why this catches us off guard. It's called money illusion.",
         "In a famous nineteen ninety-seven study, Eldar Shafir, Peter Diamond, and Amos Tversky showed that people "
         "tend to think in dollar amounts, even when inflation is quietly changing what those dollars are worth.",
-    ], "manim", lambda T, d: manim("Quote", [S(T, 1) - 0.2, S(T, 1) + 2.0],
+    ], "manim", lambda T, d: manim("Quote", [0.3, S(T, 1) + 0.5],
                                    lines=["We tend to think in dollar amounts,", "not in what the dollars buy."],
                                    who="Shafir, Diamond & Tversky, \"Money Illusion\"",
                                    cite="Quarterly Journal of Economics 112(2), 1997 (paraphrased)")),
@@ -317,7 +317,7 @@ SCENES = [
         "Americans now owe a record one point two eight five trillion dollars on them,",
         "at interest rates that average more than twenty percent.",
     ], "manim", lambda T, d: manim(
-        "BigNumber", [S(T, 1) + 0.2, S(T, 2) + 0.2], value=1.285, prefix="$", suffix=" trillion", decimals=3,
+        "BigNumber", [0.4, S(T, 2) + 0.2], value=1.285, prefix="$", suffix=" trillion", decimals=3,
         label="U.S. credit card balances, Q3 2026 (a record)", color="#E0524A",
         caption="Average card interest rate: above 20%",
         source="New York Fed Household Debt and Credit Report (Nov 2026); Federal Reserve G.19 (Nov 2026)")),
@@ -328,7 +328,7 @@ SCENES = [
         "interest alone.",
         "That's money that never shows up as a purchase. It just quietly eats the raise you worked for.",
     ], "manim", lambda T, d: manim(
-        "BigNumber", [S(T, 1) + 1.5, S(T, 2)], value=1000, prefix="~$", suffix=" a year",
+        "BigNumber", [0.4, S(T, 2)], value=1000, prefix="~$", suffix=" a year",
         label="Interest on a $5,000 card balance at 20% APR (illustrative)", color="#E0524A",
         caption="Before a single dollar of the balance is paid off",
         source="Simple-interest approximation: $5,000 x 20%. Actual cost depends on compounding and payments.")),
@@ -367,7 +367,7 @@ SCENES = [
         "about two percent a year, by its preferred measure.",
         "A little inflation is considered healthy for the economy. But it means your pay has to grow every year, "
         "just to stand still.",
-    ], "manim", lambda T, d: manim("BigNumber", [S(T, 1), S(T, 2) + 0.5], value=2, suffix="% a year",
+    ], "manim", lambda T, d: manim("BigNumber", [1.2, S(T, 2) + 0.5], value=2, suffix="% a year",
                                    label="The Federal Reserve's long-run inflation goal",
                                    caption="So prices are designed to rise, slowly, every year",
                                    source="FOMC Statement on Longer-Run Goals (adopted Jan 2012); measured with PCE prices")),
