@@ -74,6 +74,16 @@ def cmd_test_scene(args) -> int:
     return 0
 
 
+def cmd_episode(args) -> int:
+    from pathlib import Path
+    from animation.director import Director
+    s = _settings()
+    d = Director(s, Path(args.storyboard), voice=args.voice, workers=args.workers)
+    out = d.run(only=args.only)
+    print(f"Episode output: {out}")
+    return 0
+
+
 def _print_status(state) -> None:
     print("\nStep          Status            Note")
     print("-" * 70)
@@ -103,6 +113,12 @@ def build_parser() -> argparse.ArgumentParser:
     ts.add_argument("--voice", default=None, help="TTS provider override (elevenlabs|espeak|file:<dir>)")
     ts.add_argument("--workers", type=int, default=2, help="parallel Blender processes")
     ts.set_defaults(fn=cmd_test_scene)
+    ep = sub.add_parser("episode", help="render a full episode from a storyboard")
+    ep.add_argument("storyboard", help="path to storyboard.py")
+    ep.add_argument("--voice", default=None)
+    ep.add_argument("--workers", type=int, default=2)
+    ep.add_argument("--only", nargs="*", help="render only these scene ids")
+    ep.set_defaults(fn=cmd_episode)
     return p
 
 

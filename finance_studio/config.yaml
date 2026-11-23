@@ -53,7 +53,7 @@ tts:
     style: 0.15
   espeak:
     voice: en-us
-    speed_wpm: 150
+    speed_wpm: 165
 
 render:
   blender_engine: BLENDER_EEVEE  # BLENDER_EEVEE | CYCLES | BLENDER_WORKBENCH

@@ -389,7 +389,6 @@ def apartment_night(cfg, fonts, D):
                          (cx0 + 4.7, fl + 3.9)], "#E3A72F", 0.006, back, INK, 0.03)
     L.shape("lamp.shade", [(-0.2, fl + 9.0), (0.5, fl + 9.0), (0.8, fl + 8.3), (-0.5, fl + 8.3)], "#F2C94C", 0.004,
             back, INK, 0.03, smooth=False)
-    L.shape("lamp.glow", L.ellipse_pts(0.15, fl + 7.6, 2.2, 1.4, 14), "#FFE6A8", 0.0035, back, None, alpha=0.18)
     # table + chair in front (z near 0.6) - characters sit at x ~ table_x - 1.6
     tl = layer("table", 0.6, D)
     tx = cfg.get("table_x", 1.0)
