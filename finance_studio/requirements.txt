@@ -5,6 +5,7 @@ pydantic>=2.7
 python-dotenv>=1.0
 requests>=2.31
 numpy>=1.26
+scipy>=1.11       # audio synthesis filters
 pillow>=10.0
 manim>=0.18        # financial charts (needs cairo + pango system libs)
 pytest>=8.0

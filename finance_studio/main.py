@@ -69,7 +69,7 @@ def cmd_approve(args) -> int:
 def cmd_test_scene(args) -> int:
     from animation.prototype import run_prototype
     s = _settings()
-    out = run_prototype(s, voice=args.voice)
+    out = run_prototype(s, voice=args.voice, workers=args.workers)
     print(f"Prototype scene written to {out}")
     return 0
 
@@ -100,7 +100,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--topic", required=True)
     ap.set_defaults(fn=cmd_approve)
     ts = sub.add_parser("test-scene")
-    ts.add_argument("--voice", default=None, help="TTS provider override (elevenlabs|espeak|file:<path>)")
+    ts.add_argument("--voice", default=None, help="TTS provider override (elevenlabs|espeak|file:<dir>)")
+    ts.add_argument("--workers", type=int, default=2, help="parallel Blender processes")
     ts.set_defaults(fn=cmd_test_scene)
     return p
 
