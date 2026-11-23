@@ -144,7 +144,7 @@ def run_prototype(settings: Settings, voice: str | None = None, workers: int = 1
     fps = settings.get("video.fps")
 
     # 1. narration + timing
-    provider = make_provider(settings, voice)
+    provider = make_provider(settings, voice, len(LINES))
     vl = synthesize_lines(LINES, provider, out / "audio" / "lines", cache)
     timings = mixer.layout_lines([v.duration for v in vl], LEAD, GAPS)
     duration = round(timings[-1][1] + TAIL, 3)

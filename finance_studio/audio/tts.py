@@ -114,14 +114,46 @@ class ElevenLabsProvider(Provider):
         return {"voice": self.voice, "model": self.model, **self.settings}
 
 
+def split_on_pauses(src: Path, n_lines: int, out_dir: Path, min_pause: float = 0.12) -> list[Path]:
+    """Split one narration take into n_lines files at its n_lines-1 longest pauses.
+
+    Generating a whole script in one take keeps the narrator's intonation natural;
+    splitting at the sentence pauses restores per-line timing for animation sync.
+    """
+    import re
+    out = run([ffmpeg_bin(), "-hide_banner", "-i", str(src), "-af", f"silencedetect=n=-40dB:d={min_pause}",
+               "-f", "null", "-"]).stderr
+    starts = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", out)]
+    ends = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", out)]
+    total = media_duration(src)
+    gaps = [(e - s, (s + e) / 2) for s, e in zip(starts, ends) if 0.05 < s and e < total - 0.05]
+    if len(gaps) < n_lines - 1:
+        raise TTSUnavailable(f"found only {len(gaps)} pauses in {src.name}, need {n_lines - 1} to split the lines")
+    cuts = sorted(mid for _, mid in sorted(gaps, reverse=True)[: n_lines - 1])
+    bounds = [0.0] + cuts + [total]
+    out_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for i, (a, b) in enumerate(zip(bounds, bounds[1:])):
+        dst = out_dir / f"line_{i:02d}.wav"
+        run([ffmpeg_bin(), "-y", "-v", "error", "-i", str(src), "-ss", f"{a:.3f}", "-to", f"{b:.3f}",
+             "-ac", "1", "-ar", str(SAMPLE_RATE), str(dst)])
+        paths.append(dst)
+    return paths
+
+
 class FileProvider(Provider):
-    """Narration supplied as files: <dir>/line_00.(wav|mp3), line_01..."""
+    """Narration supplied as files: <dir>/line_00.(wav|mp3), line_01... or one full take
+    (<dir>/full.(mp3|wav)) which is split into lines at its longest pauses."""
     name = "file"
 
-    def __init__(self, directory: Path):
+    def __init__(self, directory: Path, n_lines: int | None = None):
         self.dir = Path(directory)
         if not self.dir.is_dir():
             raise TTSUnavailable(f"narration directory not found: {self.dir}")
+        full = sorted(self.dir.glob("full.*"))
+        if full and n_lines:
+            split_on_pauses(full[0], n_lines, self.dir / "split")
+            self.dir = self.dir / "split"
         self._i = 0
 
     def synth(self, text, out):
@@ -135,10 +167,10 @@ class FileProvider(Provider):
         return {"dir": str(self.dir.resolve()), "i": self._i}
 
 
-def make_provider(settings, override: str | None = None) -> Provider:
+def make_provider(settings, override: str | None = None, n_lines: int | None = None) -> Provider:
     name = override or settings.get("tts.provider", "elevenlabs")
     if name.startswith("file:"):
-        return FileProvider(Path(name[5:]))
+        return FileProvider(Path(name[5:]), n_lines)
     if name == "elevenlabs":
         import os
         el = settings.get("tts.elevenlabs", {}) or {}
