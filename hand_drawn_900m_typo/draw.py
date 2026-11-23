@@ -51,7 +51,7 @@ class Cv:
         else: s.line(pts,w,out,amp)
     def rect(s,x,y,w_,h_,fill=None,w=5,out=INK,amp=1.6): s.poly([(x,y),(x+w_,y),(x+w_,y+h_),(x,y+h_)],fill,w,out,amp)
     def text(s,x,y,t,size=60,col=INK,f="h",anchor="mm",rot=0,box=None,scale=1.0):
-        if scale<=0.15: return
+        if scale<=0.15 or size*scale<3: return
         fo=font(f,size*scale); x+=s.r.gauss(0,1.0); y+=s.r.gauss(0,1.0)
         if not rot and not box:
             s.d.multiline_text((x*SS,y*SS),t,font=fo,fill=col,anchor=anchor,align="center",spacing=size*0.1*SS); return

@@ -7,68 +7,83 @@ PI=math.pi
 def sn(f,ph=0): return math.sin(G.t*f+ph)
 def go(tl,t0,t1,a,b):
     u=cl((tl-t0)/(t1-t0)); return lerp(a,b,u),(0<u<1)
+def limb(c,pts,w,col):
+    c.line(pts,w+8,INK,0.9); c.line(pts,w,col,0.5)
+def dark(col,k=0.72): return tuple(int(v*k) for v in col)
 def guy(c,x,y,s=1.0,suit=NAVY,skin=0,mood="n",hair=0,arms=None,tie=RED,glasses=False,robe=False,
         walk=None,face=1,talk=False,lean=0,look=0,pid=0.0):
-    t=G.t; sk=SK[skin]
-    bob=-abs(math.sin(walk))*8*s if walk is not None else math.sin(t*2.6+pid)*2.5*s
-    hx=x+lean*1.7*s; hy=y-178*s+bob*1.3; tx=x+lean*s
-    hip=y-6*s+bob
+    t=G.t; sk=SK[skin]; tr=dark(suit)
+    bob=-abs(math.sin(walk))*9*s if walk is not None else math.sin(t*2.6+pid)*2.5*s
+    hx=x+lean*1.7*s; hy=y-186*s+bob*1.3; tx=x+lean*s; hip=y-10*s+bob
     for i,sx in enumerate((-1,1)):
-        hpx=x+sx*15*s
-        if walk is None: foot=(x+sx*19*s,y+52*s); knee=((hpx+foot[0])/2,(hip+foot[1])/2)
+        hpx=x+sx*20*s
+        if walk is None: foot=(x+sx*24*s,y+50*s); knee=((hpx+foot[0])/2,(hip+foot[1])/2)
         else:
             ph=walk+(0 if i==0 else PI)
-            foot=(x+face*30*s*math.cos(ph),y+52*s-max(0,math.sin(ph))*20*s)
-            knee=((hpx+foot[0])/2+face*10*s,(hip+foot[1])/2-3*s)
-        c.line([(hpx,hip),knee,foot],6,INK,1.2); c.ell(foot[0]+face*7*s,foot[1]+4*s,17*s,8*s,INK,3)
-    hands=[]
+            foot=(x+face*34*s*math.cos(ph),y+50*s-max(0,math.sin(ph))*24*s)
+            knee=((hpx+foot[0])/2+face*12*s,(hip+foot[1])/2-4*s)
+        limb(c,[(hpx,hip),knee,foot],20*s,tr); c.ell(foot[0]+face*9*s,foot[1]+5*s,23*s,11*s,INK,3)
+    hands=[]; armdraw=[]
     for i,sx in enumerate((-1,1)):
         if arms and arms[i] is not None: ax,ay=arms[i]
-        elif walk is not None: ax,ay=sx*48-face*28*math.cos(walk+(0 if i==0 else PI)),-12
-        else: ax,ay=sx*62+2*math.sin(t*2+pid+i),-10
-        sh=(tx+sx*40*s,y-98*s+bob); hd=(x+ax*s,y+ay*s+bob)
-        el=((sh[0]+hd[0])/2+sx*8*s,(sh[1]+hd[1])/2+10*s)
-        c.line([sh,el,hd],13*s,suit,1.2); c.line([sh,el,hd],3,INK,1.6); c.ell(hd[0],hd[1],12*s,12*s,sk,3); hands.append(hd)
+        elif walk is not None: ax,ay=sx*52-face*32*math.cos(walk+(0 if i==0 else PI)),-14
+        else: ax,ay=sx*68+2*math.sin(t*2+pid+i),-12
+        sh=(tx+sx*46*s,y-104*s+bob); hd=(x+ax*s,y+ay*s+bob)
+        el=((sh[0]+hd[0])/2+sx*10*s,(sh[1]+hd[1])/2+12*s)
+        armdraw.append((sh,el,hd)); hands.append(hd)
     T=lambda px,py:(x+px*s+(lean*s if py<-60 else 0),y+py*s+bob)
-    if robe: c.poly([T(-52,-112),T(52,-112),T(62,10),T(-62,10)],suit)
+    def arm(i):
+        sh,el,hd=armdraw[i]; limb(c,[sh,el,hd],17*s,suit); c.ell(hd[0],hd[1],15*s,15*s,sk,3)
+    back=0 if face>0 else 1
+    arm(back)
+    if robe: c.poly([T(-58,-120),T(58,-120),T(68,10),T(-68,10)],suit)
     else:
-        c.poly([T(-46,-112),T(46,-112),T(38,0),T(-38,0)],suit)
-        c.poly([T(-16,-112),T(16,-112),T(0,-70)],WHT,3)
-        if tie: c.poly([T(-7,-108),T(7,-108),T(9,-58),T(0,-46),T(-9,-58)],tie,3)
-    c.ell(hx,hy,62*s,58*s,sk)
+        c.poly([T(-52,-120),T(52,-120),T(44,2),T(-44,2)],suit)
+        c.poly([T(-18,-120),T(18,-120),T(0,-72)],WHT,3)
+        if tie: c.poly([T(-8,-114),T(8,-114),T(10,-60),T(0,-46),T(-10,-60)],tie,3)
+        c.line([T(-18,-120),T(-4,-60)],3); c.line([T(18,-120),T(4,-60)],3)
+    arm(1-back)
+    for sx in(-1,1): c.ell(hx+sx*64*s,hy+6*s,11*s,14*s,sk,3)
+    c.ell(hx,hy,66*s,62*s,sk)
     hc=[(60,42,34),(30,26,30),(170,110,50),(200,200,205),(110,60,40)][hair%5]
     Hh=lambda px,py:(hx+px*s,hy+py*s)
-    if hair==0: c.poly([Hh(-60,-14),Hh(-40,-56),Hh(10,-66),Hh(56,-40),Hh(60,-10),Hh(20,-34),Hh(-30,-30)],hc,3)
-    elif hair==1: c.poly([Hh(-62,10),Hh(-58,-44),Hh(0,-70),Hh(58,-44),Hh(62,10),Hh(46,-26),Hh(-46,-26)],hc,3)
-    elif hair==2: c.ell(hx,hy-64*s,26*s,22*s,hc,3); c.poly([Hh(-58,-18),Hh(-30,-58),Hh(30,-58),Hh(58,-18),Hh(0,-36)],hc,3)
+    if hair==0: c.poly([Hh(-64,-14),Hh(-44,-60),Hh(10,-72),Hh(60,-44),Hh(64,-10),Hh(22,-36),Hh(-32,-32)],hc,3)
+    elif hair==1: c.poly([Hh(-66,10),Hh(-62,-48),Hh(0,-76),Hh(62,-48),Hh(66,10),Hh(50,-28),Hh(-50,-28)],hc,3)
+    elif hair==2: c.ell(hx,hy-70*s,28*s,24*s,hc,3); c.poly([Hh(-62,-18),Hh(-32,-62),Hh(32,-62),Hh(62,-18),Hh(0,-38)],hc,3)
     elif hair==3:
-        for sx in(-1,1): c.poly([Hh(sx*62,6),Hh(sx*66,-30),Hh(sx*40,-50),Hh(sx*46,-10)],hc,3)
-    elif hair==4: c.poly([Hh(-60,-10),Hh(-50,-60),Hh(-20,-50),Hh(0,-74),Hh(22,-50),Hh(52,-60),Hh(60,-10),Hh(0,-30)],hc,3)
-    fo=(face*7+look*9)*s; fx=hx+fo; ex=22*s; ey=hy-4*s
-    blink=((t+pid*1.7)%3.3)<0.14
-    if mood=="panic":
-        for sx in(-1,1): c.ell(fx+sx*ex,ey,17*s,19*s,WHT,3); c.ell(fx+sx*ex+3*s*math.sin(t*20),ey+2,4*s,4*s,INK,2)
-        c.ell(fx,hy+32*s,13*s,(11+6*abs(math.sin(t*12)))*s,(90,30,30),3)
-        for sx,dy in((-1,-30),(1,-10)):
-            dd=((t*60+dy)%30)*s; c.poly([(hx+sx*76*s,hy+dy*s+dd),(hx+sx*84*s,hy+(dy+18)*s+dd),(hx+sx*68*s,hy+(dy+18)*s+dd)],(140,200,240),2)
-    elif mood=="happy":
-        for sx in(-1,1): c.ell(fx+sx*ex,ey+6*s,11*s,11*s,None,4,a0=200,a1=340,n=8)
-        if talk: c.ell(fx,hy+28*s,16*s,(5+9*abs(math.sin(t*13+pid)))*s,(90,30,30),3)
-        else: c.ell(fx,hy+18*s,24*s,20*s,None,4,a0=20,a1=160,n=10)
-    elif mood=="smug":
-        c.poly([(fx-44*s,ey-12*s),(fx+44*s,ey-12*s),(fx+38*s,ey+12*s),(fx+6*s,ey+10*s),(fx,ey-2*s),(fx-6*s,ey+10*s),(fx-38*s,ey+12*s)],INK,2)
-        if talk: c.ell(fx,hy+32*s,12*s,(4+7*abs(math.sin(t*13+pid)))*s,(90,30,30),3)
-        else: c.line([(fx-10*s,hy+30*s),(fx+8*s,hy+33*s),(fx+24*s,hy+24*s)],4)
+        for sx in(-1,1): c.poly([Hh(sx*66,6),Hh(sx*70,-32),Hh(sx*42,-54),Hh(sx*50,-10)],hc,3)
+    elif hair==4: c.poly([Hh(-64,-10),Hh(-54,-64),Hh(-22,-54),Hh(0,-80),Hh(24,-54),Hh(56,-64),Hh(64,-10),Hh(0,-32)],hc,3)
+    fo=(face*8+look*8)*s; fx=hx+fo; ex=25*s; ey=hy-4*s
+    blink=((t+pid*1.7)%3.3)<0.13; amp=G.amp(t) if talk else 0
+    pdx=(face*3+look*5)*s
+    c.line([(fx+face*2*s,ey+12*s),(fx+face*9*s,ey+22*s),(fx+face*2*s,ey+26*s)],3,INK,0.6)
+    if mood=="smug":
+        c.poly([(fx-48*s,ey-13*s),(fx+48*s,ey-13*s),(fx+42*s,ey+13*s),(fx+7*s,ey+11*s),(fx,ey-2*s),(fx-7*s,ey+11*s),(fx-42*s,ey+13*s)],INK,2)
+    elif mood=="happy" and not talk:
+        for sx in(-1,1): c.ell(fx+sx*ex,ey+6*s,13*s,13*s,None,5,a0=200,a1=340,n=8)
     else:
+        big=1.35 if mood=="panic" else 1.0
         for sx in(-1,1):
-            if blink: c.line([(fx+sx*ex-7*s,ey),(fx+sx*ex+7*s,ey)],4,INK,0.8)
-            else: c.ell(fx+sx*ex,ey,5*s,6*s,INK,2)
-        if talk: c.ell(fx,hy+32*s,11*s,(3+9*abs(math.sin(t*13+pid)))*s,(90,30,30),3)
-        elif mood=="sad": c.ell(fx,hy+40*s,16*s,12*s,None,4,a0=200,a1=340,n=8)
-        else: c.line([(fx-12*s,hy+30*s),(fx+12*s,hy+30*s)],4)
+            if blink and mood!="panic": c.line([(fx+sx*ex-12*s,ey),(fx+sx*ex+12*s,ey)],5,INK,0.8)
+            else:
+                c.ell(fx+sx*ex,ey,15*s*big,18*s*big,WHT,3)
+                c.ell(fx+sx*ex+pdx+(3*s*math.sin(t*22) if mood=="panic" else 0),ey+2*s,(4 if mood=="panic" else 6.5)*s,(5 if mood=="panic" else 7.5)*s,INK,1)
+            by=ey-(34 if mood=="panic" else 27)*s
+            d=(-9 if mood in("sad","panic") else (4 if mood=="happy" else 0))*s
+            c.line([(fx+sx*(ex-13*s),by+d*(1 if True else 0)*(-1)),(fx+sx*(ex+13*s),by+d)],5,INK,0.8)
+    my=hy+36*s
+    if mood=="panic": c.ell(fx,my,15*s,(13+7*abs(math.sin(t*12)))*s,(90,30,30),3)
+    elif talk: c.ell(fx,my,(15-4*amp)*s,(3+17*amp)*s,(90,30,30),3)
+    elif mood=="happy": c.ell(fx,my-14*s,26*s,22*s,None,5,a0=20,a1=160,n=10)
+    elif mood=="smug": c.line([(fx-12*s,my-2*s),(fx+8*s,my+2*s),(fx+26*s,my-8*s)],5)
+    elif mood=="sad": c.ell(fx,my+10*s,18*s,13*s,None,5,a0=200,a1=340,n=8)
+    else: c.line([(fx-13*s,my),(fx+13*s,my)],5)
+    if mood=="panic":
+        for sx,dy in((-1,-30),(1,-10)):
+            dd=((t*60+dy)%34)*s; c.poly([(hx+sx*82*s,hy+dy*s+dd),(hx+sx*91*s,hy+(dy+20)*s+dd),(hx+sx*73*s,hy+(dy+20)*s+dd)],(140,200,240),2)
     if glasses and mood!="smug":
-        for sx in(-1,1): c.ell(fx+sx*ex,ey,19*s,17*s,None,3)
-        c.line([(fx-4*s,ey),(fx+4*s,ey)],3)
+        for sx in(-1,1): c.ell(fx+sx*ex,ey,22*s,22*s,None,4)
+        c.line([(fx-4*s,ey),(fx+4*s,ey)],4)
     return {"L":hands[0],"R":hands[1],"head":(hx,hy)}
 def paper(c,p,w,h,txt,size,col=RED):
     c.rect(p[0]-w/2,p[1]-h,w,h,WHT,4); c.text(p[0],p[1]-h/2,txt,size,col,"m")
@@ -308,27 +323,54 @@ def s10(c,tl,cu):
     gx,mv=go(t,1.2,2.8,2100,1790)
     guy(c,gx,1000,0.85,NAVY,0,"happy" if not mv else "n",0,None if mv else [(-60,-10),(-50,-250+0*t)] if False else (None if mv else [(-90+24*sn(9),-250),None]),walk=t*11 if mv else None,face=-1,pid=9)
 SC=[s1,s2,s3,s4,s5,s6,s7,s8,s9,s10]
+import soundfile as _sf, numpy as _np
+_v,_sr=_sf.read("vo.wav"); _hop=_sr//48
+_env=_np.sqrt(_np.convolve(_v**2,_np.ones(_hop*2)/(_hop*2),"same"))[::_hop]; _env=_np.clip(_env/(_np.percentile(_env,97)+1e-9),0,1)
+G.amp=staticmethod(lambda t: float(_env[min(len(_env)-1,max(0,int(t*48)))]))
+def cam(i,tl,cu):
+    """returns list of shots (start,cx,cy,zoom); the last one started wins"""
+    L=lambda a,b,u: a+(b-a)*cl(u)
+    if i==0:
+        no=cu[2]+2.6; S=[(0,960,540,1.0),(cu[2],1000,640,1.42),(no,1320,600,1.5),(no+0.6,1100,600,1.1)]
+    elif i==1:
+        t=tl-cu[1]; S=[(0,L(250,1700,tl/cu[1]),640,1.32),(cu[1],560,560,1.6),(cu[1]+2.6,960,500,1.0),(cu[1]+5.8,960,600,1.35),(cu[1]+7.6,L(420,1500,((t-7.6)/3.3)%1),760,1.4)]
+    elif i==2: S=[(0,L(-120,620,tl/1.3),640,1.5),(1.4,960,540,1.04)]
+    elif i==3:
+        tick=cu[2]+0.9; S=[(0,640,640,1.3),(cu[1],400,740,1.85),(cu[1]+1.5,900,520,1.45),(tick+0.7,960,580,1.08)]
+    elif i==4: S=[(0,960,560,1.03),(cu[1],L(520,1400,ez((tl-cu[1])/(cu[2]-cu[1]))),470,1.7),(cu[2],960,600,1.12)]
+    elif i==5:
+        p=cu[1]+3.2; q=tl-p; bx=520+(190*math.sin((q-0.8)*3.2) if q>0.8 else 0)
+        S=[(0,L(-140,520,tl/2.0),640,1.5),(2.2,560,620,1.7),(cu[1]+1.2,1320,440,1.55),(p,bx*0.5+300,620,1.55),(p+2.0,960,540,1.0)]
+    elif i==6: S=[(0,620,560,1.38),(cu[1],L(1150,880,(tl-cu[1])/1.6),400,1.5),(cu[2],1320,760,1.55),(cu[3]+1.2,960,580,1.05)]
+    elif i==7:
+        bang=cu[2]-1.6; S=[(0,L(700,960,tl/1.1),660,1.22),(cu[1],960,560,1.7),(bang-0.5,1060,560,1.5),(bang+0.4,960,560,1.0)]
+    elif i==8:
+        st=cu[2]-2.2; S=[(0,L(-200,2150,tl/cu[1]),640,1.3),(cu[1],960,470,1.6),(st-0.5,960,430,1.28),(cu[2],760,800,1.45)]
+    else:
+        S=[(0,1050,560,1.25),(cu[1],960,560,1.04),(cu[1]+2.6,980,740,1.45),(cu[2],960,540,1.0)]
+    cur=S[0]
+    for sh in S:
+        if tl>=sh[0]: cur=sh
+    t0,cx,cy,z=cur; z*=1+0.035*cl((tl-t0)/6)
+    w,h=W/z,H/z; cx=min(max(cx,w/2),W-w/2); cy=min(max(cy,h/2),H-h/2)
+    return cx-w/2,cy-h/2,w,h
 def render(t,seed):
     G.t=t; i=0
     for j,m in enumerate(META):
         if t>=m["start"]: i=j
-    m=META[i]; tl=t-m["start"]; c=Cv(seed)
-    sh=SC[i](c,tl,[q-m["start"] for q in m["cues"]]) or 0
-    return c.im.reduce(SS),sh,i,tl
+    m=META[i]; tl=t-m["start"]; cu=[q-m["start"] for q in m["cues"]]; c=Cv(seed)
+    sh=SC[i](c,tl,cu) or 0
+    x,y,w,h=cam(i,tl,cu)
+    if sh>0.5: x+=random.uniform(-sh,sh); y+=random.uniform(-sh,sh)
+    x=max(0,min(x,W-w-0.01)); y=max(0,min(y,H-h-0.01))
+    return c.im.resize((W,H),Image.BILINEAR,box=(x*SS,y*SS,(x+w)*SS,(y+h)*SS),reducing_gap=2.0)
 if __name__=="__main__":
     if sys.argv[1]=="sheet":
         ts=[float(x) for x in sys.argv[2:]]; cols=4; rows=(len(ts)+3)//4
         sheet=Image.new("RGB",(480*cols,270*rows))
-        for k,t in enumerate(ts): sheet.paste(render(t,k)[0].resize((480,270)),((k%cols)*480,(k//cols)*270))
+        for k,t in enumerate(ts): sheet.paste(render(t,k).resize((480,270)),((k%cols)*480,(k//cols)*270))
         sheet.save("sheet.jpg",quality=88)
     else:
-        Dur=float(sys.argv[2]); p=subprocess.Popen(["ffmpeg","-y","-loglevel","error","-f","rawvideo","-pix_fmt","rgb24","-s","1920x1080","-r","24","-i","-","-c:v","libx264","-crf","20","-preset","medium","-pix_fmt","yuv420p","video2.mp4"],stdin=subprocess.PIPE)
-        cur=None
-        for f in range(int(Dur*24)):
-            t=f/24
-            if f%2==0: cur=render(t,(f//4)*7919+1)
-            im,sh,i,tl=cur
-            z=1.0+0.035*min(1,tl/12)+0.01; w,h=W/z,H/z
-            ox=(W-w)/2+(random.uniform(-sh,sh) if sh>0.5 else 0); oy=(H-h)/2+(random.uniform(-sh,sh) if sh>0.5 else 0)
-            p.stdin.write(im.resize((W,H),Image.BILINEAR,box=(ox,oy,ox+w,oy+h)).tobytes())
+        Dur=float(sys.argv[2]); p=subprocess.Popen(["ffmpeg","-y","-loglevel","error","-f","rawvideo","-pix_fmt","rgb24","-s","1920x1080","-r","24","-i","-","-c:v","libx264","-crf","20","-preset","medium","-pix_fmt","yuv420p","video3.mp4"],stdin=subprocess.PIPE)
+        for f in range(int(Dur*24)): p.stdin.write(render(f/24,(f//3)*7919+1).tobytes())
         p.stdin.close(); p.wait()
