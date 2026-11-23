@@ -39,7 +39,8 @@ def import_takes(takes_dir: Path, storyboard: Path, out_dir: Path) -> int:
         if len(sc.lines) == 1:
             parts = [src]
         else:
-            parts = split_on_pauses(src, len(sc.lines), out_dir / "_split" / sc.id)
+            parts = split_on_pauses(src, len(sc.lines), out_dir / "_split" / sc.id,
+                                    weights=[len(l) for l in sc.lines])
         for p in parts:
             shutil.copyfile(p, out_dir / f"line_{idx:02d}{p.suffix}")
             idx += 1

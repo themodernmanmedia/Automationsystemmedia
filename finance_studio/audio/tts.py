@@ -114,14 +114,16 @@ class ElevenLabsProvider(Provider):
         return {"voice": self.voice, "model": self.model, **self.settings}
 
 
-def split_on_pauses(src: Path, n_lines: int, out_dir: Path, min_pause: float = 0.12) -> list[Path]:
-    """Split one narration take into n_lines files at its n_lines-1 longest pauses.
+def split_on_pauses(src: Path, n_lines: int, out_dir: Path, min_pause: float = 0.08,
+                    weights: list[int] | None = None) -> list[Path]:
+    """Split one narration take into n_lines files at pauses.
 
-    Generating a whole script in one take keeps the narrator's intonation natural;
-    splitting at the sentence pauses restores per-line timing for animation sync.
+    With `weights` (characters per line), each cut is placed at the pause closest to
+    where that line boundary is expected from the text proportions - robust when lines
+    contain several sentences. Without weights, the n_lines-1 longest pauses are used.
     """
     import re
-    out = run([ffmpeg_bin(), "-hide_banner", "-i", str(src), "-af", f"silencedetect=n=-40dB:d={min_pause}",
+    out = run([ffmpeg_bin(), "-hide_banner", "-i", str(src), "-af", f"silencedetect=n=-38dB:d={min_pause}",
                "-f", "null", "-"]).stderr
     starts = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", out)]
     ends = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", out)]
@@ -129,7 +131,26 @@ def split_on_pauses(src: Path, n_lines: int, out_dir: Path, min_pause: float = 0
     gaps = [(e - s, (s + e) / 2) for s, e in zip(starts, ends) if 0.05 < s and e < total - 0.05]
     if len(gaps) < n_lines - 1:
         raise TTSUnavailable(f"found only {len(gaps)} pauses in {src.name}, need {n_lines - 1} to split the lines")
-    cuts = sorted(mid for _, mid in sorted(gaps, reverse=True)[: n_lines - 1])
+    if weights:
+        lead = starts[0] if starts and starts[0] <= 0.05 and ends else 0.0
+        lead = ends[0] if starts and starts[0] <= 0.05 else 0.0
+        tail_s = next((s for s, e in zip(starts, ends) if e >= total - 0.05), total)
+        speech = tail_s - lead
+        cum, acc = [], 0
+        for w in weights[:-1]:
+            acc += w
+            cum.append(lead + speech * acc / sum(weights))
+        cuts, prev = [], 0.0
+        for k, t in enumerate(cum):
+            remaining = len(cum) - k - 1
+            cands = [g for g in gaps if g[1] > prev + 0.3]
+            cands = cands[:len(cands) - remaining] if remaining else cands
+            # nearest to the expected boundary, with a preference for longer (sentence-level) pauses
+            best = min(cands, key=lambda g: abs(g[1] - t) - 1.5 * g[0])
+            cuts.append(best[1])
+            prev = best[1]
+    else:
+        cuts = sorted(mid for _, mid in sorted(gaps, reverse=True)[: n_lines - 1])
     bounds = [0.0] + cuts + [total]
     out_dir.mkdir(parents=True, exist_ok=True)
     paths = []
