@@ -1,0 +1,436 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html,body{margin:0;padding:0;width:1080px;height:1920px;overflow:hidden;font-family:'Inter',sans-serif}
+  #bg{position:absolute;inset:0}
+  canvas#gl{position:absolute;inset:0}
+  .ov{position:absolute;left:0;right:0;text-align:center;pointer-events:none}
+  #chip{top:150px;display:flex;justify-content:center}
+  #chip span{background:#ffffffd9;color:#2d3b4e;font-weight:800;font-size:44px;letter-spacing:4px;padding:22px 46px;border-radius:999px;box-shadow:0 10px 30px #0002}
+  #title{top:250px;font-family:'Inter Display';font-weight:900;font-size:96px;line-height:1.02;color:#fff;text-shadow:0 6px 0 #0000001f,0 12px 40px #0003;padding:0 60px}
+  #title small{display:block;font-size:46px;font-weight:700;opacity:.92;margin-top:18px}
+  #cap{bottom:170px;padding:0 70px}
+  #cap .line{display:inline-block;background:#1d2533d9;border-radius:30px;padding:22px 34px;font-weight:800;font-size:62px;line-height:1.15;color:#fff}
+  #cap .w{opacity:.6;margin:0 5px;display:inline-block}
+  #cap .w.on{opacity:1;color:#ffe066;transform:scale(1.08)}
+  #cap .w.done{opacity:1}
+  #card{top:260px;display:flex;justify-content:center}
+  .box{background:#fffffff0;border-radius:44px;padding:40px 50px;box-shadow:0 20px 60px #0003;color:#26324a;text-align:left;width:820px;box-sizing:border-box}
+  .box h2{margin:0 0 18px;font-family:'Inter Display';font-weight:900;font-size:62px;line-height:1.05}
+  .box p{margin:10px 0;font-size:40px;font-weight:600;line-height:1.3}
+  .box .fine{font-size:30px;color:#5b6b85;font-weight:600;margin-top:22px}
+  .row{display:flex;align-items:center;gap:26px;font-size:50px;font-weight:800;margin:16px 0;transition:none}
+  .row .ck{width:62px;height:62px;border-radius:50%;background:#e8edf5;display:flex;align-items:center;justify-content:center;font-size:40px;color:#fff;flex:none}
+  .row.on .ck{background:#3dbb8c}
+  .meter{height:44px;border-radius:22px;background:#e8edf5;overflow:hidden;margin-top:16px}
+  .meter i{display:block;height:100%;background:linear-gradient(90deg,#ffb347,#ff5e62);border-radius:22px}
+  #big{top:330px;font-family:'Inter Display';font-weight:900;font-size:150px;color:#fff;text-shadow:0 10px 40px #0004}
+  #big small{display:block;font-size:56px;font-weight:800;letter-spacing:6px;opacity:.9}
+  #brand{top:56px;font-weight:900;font-size:34px;letter-spacing:8px;color:#ffffffcc}
+</style>
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+<script src="data.js"></script>
+</head>
+<body>
+<div id="bg"></div>
+<canvas id="gl" width="1080" height="1920"></canvas>
+<div class="ov" id="brand">🌱 BLOOM</div>
+<div class="ov" id="chip"></div>
+<div class="ov" id="title"></div>
+<div class="ov" id="card"></div>
+<div class="ov" id="big"></div>
+<div class="ov" id="cap"></div>
+<script type="module">
+import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+// ---------- helpers ----------
+const clamp=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const ss=(a,b,t)=>{const x=clamp((t-a)/(b-a));return x*x*(3-2*x)};
+const ramp=(a,b,t)=>clamp((t-a)/(b-a));
+const outBack=x=>{const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(x-1,3)+c1*Math.pow(x-1,2)};
+const outBounce=x=>{const n=7.5625,d=2.75;if(x<1/d)return n*x*x;if(x<2/d)return n*(x-=1.5/d)*x+.75;if(x<2.5/d)return n*(x-=2.25/d)*x+.9375;return n*(x-=2.625/d)*x+.984375};
+const win=(t,a,b,f=0.35)=>ss(a,a+f,t)*(1-ss(b-f,b,t)); // fade in/out window
+const col=(h)=>new THREE.Color(h);
+
+// ---------- renderer ----------
+const W=1080,H=1920;
+const renderer=new THREE.WebGLRenderer({canvas:document.getElementById('gl'),antialias:true,alpha:true,preserveDrawingBuffer:true});
+renderer.setSize(W,H,false);
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.05;
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(38,W/H,0.1,100);
+
+scene.add(new THREE.HemisphereLight(0xfff4ea,0x8aa0c0,1.4));
+const key=new THREE.DirectionalLight(0xffffff,2.2);
+key.position.set(3,6,5); key.castShadow=true; key.shadow.mapSize.set(2048,2048);
+Object.assign(key.shadow.camera,{left:-5,right:5,top:6,bottom:-3,near:1,far:20}); key.shadow.radius=6; key.shadow.bias=-0.0005;
+scene.add(key);
+const rim=new THREE.DirectionalLight(0xbfe3ff,1.4); rim.position.set(-4,3,-4); scene.add(rim);
+
+// ground: soft disc + shadow catcher
+const disc=new THREE.Mesh(new THREE.CircleGeometry(2.6,64),new THREE.MeshStandardMaterial({color:0xffffff,transparent:true,opacity:.28,roughness:1}));
+disc.rotation.x=-Math.PI/2; disc.position.y=0.001; scene.add(disc);
+const shadowPlane=new THREE.Mesh(new THREE.PlaneGeometry(30,30),new THREE.ShadowMaterial({opacity:.22}));
+shadowPlane.rotation.x=-Math.PI/2; shadowPlane.receiveShadow=true; scene.add(shadowPlane);
+
+// ---------- character factory ----------
+function makeBlob(opts){
+  const g=new THREE.Group();          // root (position on stage)
+  const sq=new THREE.Group(); g.add(sq); // squash/stretch from base
+  const s=opts.size;
+  const bodyMat=new THREE.MeshPhysicalMaterial({color:opts.color,roughness:.42,clearcoat:.35,clearcoatRoughness:.4,sheen:1,sheenColor:new THREE.Color(0xffffff),sheenRoughness:.6});
+  const body=new THREE.Mesh(new THREE.SphereGeometry(s,64,48),bodyMat);
+  body.scale.set(1,.95,.92); body.position.y=s*.98; body.castShadow=true; sq.add(body);
+  // belly highlight
+  const belly=new THREE.Mesh(new THREE.SphereGeometry(s*.62,48,32),new THREE.MeshPhysicalMaterial({color:0xffffff,roughness:.5,transparent:true,opacity:.22}));
+  belly.scale.set(1,.8,.5); belly.position.set(0,s*.62,s*.62); sq.add(belly);
+  const face=new THREE.Group(); face.position.y=s*.98; sq.add(face);
+  const onSurf=(x,y)=>new THREE.Vector3(x*s,y*s,Math.sqrt(Math.max(0,1-x*x-y*y))*s*.92);
+  // eyes
+  const eyeMat=new THREE.MeshPhysicalMaterial({color:0x1b1f2b,roughness:.15,clearcoat:1});
+  const hiMat=new THREE.MeshBasicMaterial({color:0xffffff});
+  const eyes=[];
+  for(const sx of [-1,1]){
+    const e=new THREE.Group(); const p=onSurf(sx*.33,.16); e.position.copy(p); e.lookAt(p.clone().multiplyScalar(2));
+    const ball=new THREE.Mesh(new THREE.SphereGeometry(s*.135,32,24),eyeMat); ball.scale.set(1,1.3,.55); e.add(ball);
+    const h1=new THREE.Mesh(new THREE.SphereGeometry(s*.042,16,12),hiMat); h1.position.set(s*.04,s*.07,s*.065); e.add(h1);
+    const h2=new THREE.Mesh(new THREE.SphereGeometry(s*.02,12,8),hiMat); h2.position.set(-s*.045,-s*.05,s*.065); e.add(h2);
+    face.add(e); eyes.push(e);
+  }
+  // brows
+  const browMat=new THREE.MeshStandardMaterial({color:opts.brow||0x2a3a3a,roughness:.6});
+  const brows=[];
+  for(const sx of [-1,1]){
+    const b=new THREE.Mesh(new THREE.CapsuleGeometry(s*.025,s*.13,6,10),browMat);
+    const p=onSurf(sx*.33,.42); b.position.copy(p); b.rotation.z=Math.PI/2; b.userData.sx=sx; face.add(b); brows.push(b);
+  }
+  // cheeks
+  const cheekMat=new THREE.MeshBasicMaterial({color:0xff8fa3,transparent:true,opacity:.55});
+  for(const sx of [-1,1]){
+    const c=new THREE.Mesh(new THREE.CircleGeometry(s*.11,32),cheekMat); const p=onSurf(sx*.56,-.04);
+    c.position.copy(p.multiplyScalar(1.005)); c.lookAt(p.clone().multiplyScalar(2)); c.scale.y=.7; face.add(c);
+  }
+  // mouth
+  const mouthG=new THREE.Group(); const mp=onSurf(0,-.13); mouthG.position.copy(mp); mouthG.lookAt(mp.clone().multiplyScalar(2)); face.add(mouthG);
+  const mouthOpen=new THREE.Mesh(new THREE.SphereGeometry(s*.12,32,16),new THREE.MeshStandardMaterial({color:0x5a1d2b,roughness:.6}));
+  mouthOpen.scale.set(1,.3,.25); mouthG.add(mouthOpen);
+  const tongue=new THREE.Mesh(new THREE.SphereGeometry(s*.07,16,12),new THREE.MeshStandardMaterial({color:0xff7b8f}));
+  tongue.position.set(0,-s*.04,s*.02); tongue.scale.set(1,.5,.4); mouthG.add(tongue);
+  const smile=new THREE.Mesh(new THREE.TorusGeometry(s*.1,s*.017,8,32,Math.PI),new THREE.MeshStandardMaterial({color:0x2a1a1f}));
+  mouthG.add(smile);
+  // arms
+  const limbMat=new THREE.MeshPhysicalMaterial({color:opts.color,roughness:.45,clearcoat:.3});
+  const arms=[];
+  for(const sx of [-1,1]){
+    const a=new THREE.Group(); a.position.set(sx*s*.9,s*.85,0);
+    const m=new THREE.Mesh(new THREE.CapsuleGeometry(s*.12,s*.28,8,16),limbMat); m.position.y=-s*.2; m.castShadow=true; a.add(m);
+    a.rotation.z=sx*.5; sq.add(a); arms.push(a);
+  }
+  // feet
+  const feet=[];
+  for(const sx of [-1,1]){
+    const f=new THREE.Mesh(new THREE.SphereGeometry(s*.26,24,16),limbMat); f.scale.set(1,.5,1.3); f.position.set(sx*s*.42,s*.09,s*.25); f.castShadow=true; g.add(f); feet.push(f);
+  }
+  return {g,sq,body,bodyMat,limbMat,eyes,brows,mouthG,mouthOpen,tongue,smile,arms,feet,s,face};
+}
+
+function poseBlob(b,{t,amp=0,mood=1,blinkSeed=0,wave=0,breath=0,hop=0,lean=0}){
+  const s=b.s;
+  // idle bob + breath
+  const bob=Math.sin(t*2.2)*0.02;
+  const sy=1+bob+breath*0.10 - hop*0.0, sx=1-bob*0.6+breath*0.08;
+  b.sq.scale.set(sx,sy,sx);
+  b.g.position.y=hop;
+  b.sq.rotation.z=lean;
+  // blink
+  const bp=(t+blinkSeed)%3.7; const blink=bp<0.14?Math.sin(bp/0.14*Math.PI):0;
+  for(const e of b.eyes) e.scale.y=1-blink*0.92;
+  // brows: worried when mood low
+  for(const br of b.brows){ const sx=br.userData.sx; br.rotation.z=Math.PI/2 + sx*lerp(-0.45,0.08,mood); br.position.y=s*lerp(.44,.4,mood); }
+  // mouth
+  const a=clamp(amp);
+  b.mouthOpen.scale.set(lerp(.55,1,a),.06+a*.55,.25); b.tongue.visible=a>.25;
+  b.mouthOpen.visible=a>.06;
+  b.smile.visible=a<=.06;
+  b.smile.rotation.z = mood>.5?Math.PI:0;  // smile vs frown
+  b.smile.scale.y = Math.abs(mood-.5)*1.6+.2;
+  b.smile.position.y = mood>.5? s*.03 : -s*.05;
+  // arms
+  b.arms[0].rotation.z=-.5 - Math.sin(t*2.2)*.04 - mood*.0;
+  b.arms[1].rotation.z= .5 + Math.sin(t*2.2)*.04;
+  if(wave>0){ b.arms[1].rotation.z=lerp(.5,2.5,wave)+Math.sin(t*12)*.35*wave; }
+  // droopy arms when sad
+  b.arms[0].rotation.z += (1-mood)*.25; b.arms[1].rotation.z -= (1-mood)*.25*(1-wave);
+}
+
+// ---------- Bloom ----------
+const MINT=col(0x6fd8b4), GREY=col(0x95a3b8);
+const bloom=makeBlob({size:1,color:MINT.clone()}); scene.add(bloom.g);
+// sprout
+const sprout=new THREE.Group(); sprout.position.y=1.86; bloom.sq.add(sprout);
+const stemMat=new THREE.MeshStandardMaterial({color:0x4cae5b,roughness:.5});
+const stem=new THREE.Mesh(new THREE.CylinderGeometry(.035,.05,.42,12),stemMat); stem.position.y=.2; stem.castShadow=true; sprout.add(stem);
+const leafTop=new THREE.Group(); leafTop.position.y=.4; sprout.add(leafTop);
+const leafMat=new THREE.MeshPhysicalMaterial({color:0x5cc76a,roughness:.35,clearcoat:.4});
+const leaves=[];
+for(const sx of [-1,1]){
+  const lg=new THREE.Group(); const l=new THREE.Mesh(new THREE.SphereGeometry(.2,24,16),leafMat);
+  l.scale.set(1.25,.32,.7); l.position.x=sx*.22; l.castShadow=true; lg.add(l); lg.userData.sx=sx; leafTop.add(lg); leaves.push(lg);
+}
+// flower (outro)
+const flower=new THREE.Group(); flower.position.y=.06; leafTop.add(flower);
+const petalMat=new THREE.MeshPhysicalMaterial({color:0xff8fb1,roughness:.35,clearcoat:.5});
+for(let i=0;i<6;i++){const p=new THREE.Mesh(new THREE.SphereGeometry(.11,20,14),petalMat);const a=i/6*Math.PI*2;p.position.set(Math.cos(a)*.13,.08,Math.sin(a)*.13);p.scale.set(1,.45,1);flower.add(p);}
+const fc=new THREE.Mesh(new THREE.SphereGeometry(.08,20,14),new THREE.MeshStandardMaterial({color:0xffd166})); fc.position.y=.12; flower.add(fc);
+
+// ---------- Friend (Pip) ----------
+const pip=makeBlob({size:.62,color:col(0xffb48a)}); scene.add(pip.g);
+// tiny curl on top
+const curl=new THREE.Mesh(new THREE.TorusGeometry(.08,.03,8,24,Math.PI*1.5),new THREE.MeshStandardMaterial({color:0xff9466})); curl.position.set(0,1.22,0); pip.sq.add(curl);
+
+// ---------- label textures ----------
+function labelTex(text,bg,fg='#fff',w=512,h=256,fs=96){
+  const c=document.createElement('canvas'); c.width=w; c.height=h; const x=c.getContext('2d');
+  if(bg){x.fillStyle=bg;x.fillRect(0,0,w,h);}
+  x.fillStyle=fg; x.font=`900 ${fs}px Inter`; x.textAlign='center'; x.textBaseline='middle'; x.fillText(text,w/2,h/2+4);
+  const tx=new THREE.CanvasTexture(c); tx.colorSpace=THREE.SRGBColorSpace; tx.anisotropy=8; return tx;
+}
+
+// ---------- worry boxes ----------
+const WORRIES=[
+  ['WORK',0x7aa2f7,[-1.28,.32,-.2],.62,2.9],
+  ['BILLS',0xf7768e,[1.3,.32,-.1],.62,3.3],
+  ['EMAILS',0xbb9af7,[-1.22,.98,-.35],.58,3.65],
+  ['TO-DO',0xe0af68,[1.24,.98,-.3],.58,4.0],
+  ['TEXTS',0x2ac3de,[-.62,2.25,-.9],.6,5.3],
+  ['DEADLINES',0xff9e64,[.6,2.3,-1.0],.62,6.3],
+  ['CHORES',0x9ece6a,[0,2.95,-1.1],.58,7.3],
+];
+const boxes=WORRIES.map(([label,color,pos,size,tDrop],i)=>{
+  const g=new THREE.Group();
+  const m=new THREE.Mesh(new RoundedBoxGeometry(size,size,size,4,size*.12),new THREE.MeshPhysicalMaterial({color,roughness:.5,clearcoat:.3,transparent:true}));
+  m.castShadow=true; m.receiveShadow=true; g.add(m);
+  const lab=new THREE.Mesh(new THREE.PlaneGeometry(size*.92,size*.46),new THREE.MeshBasicMaterial({map:labelTex(label,null,'#ffffff',512,256,label.length>7?74:100),transparent:true}));
+  lab.position.z=size/2+.002; g.add(lab);
+  g.userData={label,pos:new THREE.Vector3(...pos),size,tDrop,rot:(i%2?1:-1)*(.12+.05*i),mat:m.material,lab,i};
+  scene.add(g); return g;
+});
+
+// ---------- racing-thoughts scribble ----------
+const pts=[];{let seed=7;const r=()=>{seed=(seed*9301+49297)%233280;return seed/233280};for(let i=0;i<16;i++)pts.push(new THREE.Vector3((r()-.5)*1.1,(r()-.5)*.55,(r()-.5)*.5));}
+const scribble=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts,true),300,.022,8,true),new THREE.MeshStandardMaterial({color:0x3a4256,roughness:.6,transparent:true}));
+scribble.position.set(0,2.75,.2); scene.add(scribble);
+
+// ---------- breathing ring ----------
+const ring=new THREE.Mesh(new THREE.TorusGeometry(1.55,.045,16,128),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true}));
+ring.position.set(0,1.05,0); scene.add(ring);
+const ring2=new THREE.Mesh(new THREE.TorusGeometry(1.55,.02,16,128),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true}));
+ring2.position.copy(ring.position); scene.add(ring2);
+
+// ---------- notepad ----------
+const padC=document.createElement('canvas'); padC.width=512; padC.height=640; const padX=padC.getContext('2d');
+const padTex=new THREE.CanvasTexture(padC); padTex.colorSpace=THREE.SRGBColorSpace; padTex.anisotropy=8;
+let padN=-1;
+function drawPad(n){ if(n===padN)return; padN=n; const x=padX;
+  x.fillStyle='#fffdf6'; x.fillRect(0,0,512,640);
+  x.fillStyle='#ff8fa3'; x.fillRect(0,0,512,70);
+  x.fillStyle='#fff'; x.font='900 40px Inter'; x.textAlign='center'; x.fillText('ON MY MIND',256,48);
+  x.strokeStyle='#cfe0f5'; x.lineWidth=3; for(let y=140;y<640;y+=70){x.beginPath();x.moveTo(30,y);x.lineTo(482,y);x.stroke();}
+  x.textAlign='left'; x.fillStyle='#2b3550'; x.font='800 42px Inter';
+  WORRIES.slice(0,n).forEach(([l],i)=>{x.fillText('• '+l[0]+l.slice(1).toLowerCase(),44,128+i*70-4)});
+  padTex.needsUpdate=true; }
+drawPad(0);
+const pad=new THREE.Group();
+const padBack=new THREE.Mesh(new RoundedBoxGeometry(1.05,1.3,.06,3,.03),new THREE.MeshStandardMaterial({color:0xf2e6d0})); padBack.castShadow=true; pad.add(padBack);
+const padFace=new THREE.Mesh(new THREE.PlaneGeometry(1,1.25),new THREE.MeshStandardMaterial({map:padTex,roughness:.9})); padFace.position.z=.032; pad.add(padFace);
+scene.add(pad);
+
+// ---------- checkmark + sparkles + hearts ----------
+const check=new THREE.Mesh(new THREE.PlaneGeometry(.7,.7),new THREE.MeshBasicMaterial({map:labelTex('✔','#3dbb8c','#fff',256,256,190),transparent:true}));
+{ // round it
+  const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d');x.fillStyle='#3dbb8c';x.beginPath();x.arc(128,128,120,0,7);x.fill();
+  x.strokeStyle='#fff';x.lineWidth=30;x.lineCap='round';x.lineJoin='round';x.beginPath();x.moveTo(70,132);x.lineTo(112,174);x.lineTo(190,90);x.stroke();
+  const tx=new THREE.CanvasTexture(c);tx.colorSpace=THREE.SRGBColorSpace;check.material.map=tx;
+}
+scene.add(check);
+function emojiTex(e,size=256){const c=document.createElement('canvas');c.width=c.height=size;const x=c.getContext('2d');x.font=`${size*.8}px "Noto Color Emoji"`;x.textAlign='center';x.textBaseline='middle';x.fillText(e,size/2,size/2+size*.05);const tx=new THREE.CanvasTexture(c);tx.colorSpace=THREE.SRGBColorSpace;return tx;}
+const heartTex=emojiTex('💗'), sparkTex=emojiTex('✨'), bellTex=emojiTex('🔔'), petalTex=emojiTex('🌸');
+function spriteSet(tex,n,scale){return Array.from({length:n},()=>{const s=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false}));s.scale.setScalar(scale);scene.add(s);return s;});}
+const hearts=spriteSet(heartTex,6,.38), sparks=spriteSet(sparkTex,8,.35), bells=spriteSet(bellTex,5,.42), petals=spriteSet(petalTex,18,.3);
+
+// ---------- overlays ----------
+const $=id=>document.getElementById(id);
+const bgEl=$('bg'), chipEl=$('chip'), titleEl=$('title'), cardEl=$('card'), bigEl=$('big'), capEl=$('cap');
+let last={};
+function setHTML(el,key,html){ if(last[key]!==html){el.innerHTML=html;last[key]=html;} }
+
+// captions: chunk words
+const WORDS=window.WORDS; const chunks=[]; {let cur=[];
+  WORDS.forEach((w,i)=>{cur.push(i); const end=/[.,?!:]$/.test(w[0]); const next=WORDS[i+1];
+    const gap=next?next[1]-w[2]:9; if(cur.length>=4|| (end&&cur.length>=2) || gap>.4 || !next){chunks.push(cur);cur=[];}});
+  if(cur.length)chunks.push(cur);}
+function caption(t){
+  let c=null; for(const ch of chunks){const a=WORDS[ch[0]][1]-.05, b=WORDS[ch[ch.length-1]][2]+.35; if(t>=a&&t<b){c=ch;break;}}
+  if(!c){setHTML(capEl,'cap','');return;}
+  const html='<span class="line">'+c.map(i=>{const w=WORDS[i];const cls=t>=w[1]&&t<w[2]+.08?'on':(t>=w[2]?'done':'');return `<span class="w ${cls}">${w[0].replace(/[,:]$/,'')}</span>`}).join(' ')+'</span>';
+  setHTML(capEl,'cap',html);
+}
+function opacity(el,o,ty=0,sc=1){el.style.opacity=o.toFixed(3);el.style.transform=`translateY(${ty.toFixed(1)}px) scale(${sc.toFixed(3)})`;}
+
+const ENV=window.ENV;
+function ampAt(t){const f=t*30;const i=Math.floor(f);const a=ENV[i]||0,b=ENV[i+1]||0;return lerp(a,b,f-i);}
+
+// ---------- timeline ----------
+const T_END=80;
+function update(t){
+  // ---- mood: 1 happy .. 0 overwhelmed
+  let mood=1 - ss(3,8,t)*1 + ss(21,23,t)*.25 + ss(29,32,t)*.2 + ss(41.8,43.5,t)*.2 + ss(50.4,52.5,t)*.3 + ss(54.5,57,t)*.05;
+  mood=clamp(mood);
+  // ---- background gradient
+  const happyTop=col(0xffc8a8), happyBot=col(0xb9a7ff), sadTop=col(0x7d8aa3), sadBot=col(0x3f4a63);
+  const top=sadTop.clone().lerp(happyTop,mood), bot=sadBot.clone().lerp(happyBot,mood);
+  bgEl.style.background=`radial-gradient(120% 70% at 50% 35%, #${top.clone().lerp(col(0xffffff),.25).getHexString()} 0%, #${top.getHexString()} 40%, #${bot.getHexString()} 100%)`;
+
+  // ---- Bloom body color & pose
+  bloom.bodyMat.color.copy(GREY).lerp(MINT,mood); bloom.limbMat.color.copy(bloom.bodyMat.color);
+  const amp=Math.pow(ampAt(t),.8);
+  // breathing (step 1)
+  let breath=0;
+  breath = ss(25.7,27.5,t) - ss(29,31.6,t);
+  // intro pop
+  const pop=outBack(ramp(0,.7,t));
+  bloom.g.scale.setScalar(Math.max(.001,pop));
+  let hop=0;
+  hop+=Math.max(0,Math.sin(clamp((t-49.5)/.7)*Math.PI))*.55;       // hop to the tiny box
+  hop+=Math.max(0,Math.sin(clamp((t-73.4)/.6)*Math.PI))*.6;        // "you've got this"
+  hop+=Math.max(0,Math.sin(clamp((t-.15)/.5)*Math.PI))*.25;
+  const wave= win(t,.0,2.0,.4) + win(t,74.5,79.5,.4);
+  // bloom x position
+  let bx=0; bx+=ss(36,38.3,t)*-.42 - ss(44.4,45.5,t)*-.42; // step2 shift left
+  bx+=ss(53.4,55.2,t)*-.5 - ss(66.8,68,t)*-.5;               // make room for Pip
+  // step3: walk to chosen box
+  bx+=ss(49.3,50.1,t)*.35 - ss(51,52.2,t)*.35;
+  bloom.g.position.x=bx; bloom.g.rotation.y=Math.sin(t*.6)*.06 + ss(53.6,55,t)*.35 - ss(66.8,68,t)*.35;
+  const lean = -ss(6,9,t)*.0 + Math.sin(t*1.1)*.015;
+  poseBlob(bloom,{t,amp,mood,wave:clamp(wave),breath,hop,lean});
+  // overwhelmed: squash under weight
+  const weight=ss(5,9,t)*(1-ss(42,44,t));
+  bloom.sq.scale.y*=1-weight*.08; bloom.sq.scale.x*=1+weight*.04; bloom.sq.scale.z*=1+weight*.04;
+  // shiver when racing thoughts
+  bloom.sq.position.x=Math.sin(t*40)*.012*win(t,6.8,10.3,.3);
+
+  // sprout droop
+  const droop=1-mood; // 0..1
+  sprout.rotation.z=droop*.9; sprout.rotation.x=droop*.25;
+  leafTop.rotation.z=droop*.4;
+  for(const l of leaves){const sx=l.userData.sx; l.rotation.z=sx*lerp(.45,-.9,droop)+Math.sin(t*2+sx)*.05;}
+  leafMat.color.set(0x5cc76a).lerp(col(0xa3a067),droop); stemMat.color.set(0x4cae5b).lerp(col(0x8e8c5c),droop);
+  const fl=outBack(ramp(73.4,74.4,t)); flower.scale.setScalar(Math.max(.001,fl)); flower.visible=t>73.4; flower.rotation.y=t*.8;
+  sprout.scale.setScalar(1+ss(51,52.5,t)*.25);
+
+  // ---- worry boxes
+  for(const b of boxes){const u=b.userData;
+    const dt=ramp(u.tDrop,u.tDrop+.75,t); const p=u.pos;
+    let x=p.x,y=p.y+(1-outBounce(dt))*7,z=p.z, sc=1, op=1, rz=u.rot*(1-dt*.5);
+    // breathing: gently pushed out
+    const push=ss(25.7,27.5,t)-ss(29,31.6,t); x+=Math.sign(p.x||1)*push*.12;
+    // step2: shrink & move to a row at the front
+    const sh=ss(43,44.2,t);
+    const rowX=-1.05+u.i*.35, rowY=.11, rowZ=1.15;
+    x=lerp(x,rowX,sh); y=lerp(y,rowY,sh); z=lerp(z,rowZ,sh); sc=lerp(1,.36,sh); rz=lerp(rz,0,sh);
+    // step3: pick one (index 3 "TO-DO"), others sink/fade
+    const chosen=u.i===3;
+    if(chosen){ const hl=ss(45.4,46.2,t); y+=hl*.35+Math.sin(t*5)*.04*hl; sc*=1+hl*.5;
+      const done=ss(50.5,50.9,t); sc*=1-done; }
+    else { const f=ss(47.5,49,t); op=1-f*.8; y-=f*.05; sc*=1-f*.25; }
+    // fade all at step4
+    const gone=ss(53.4,54.4,t); op*=1-gone;
+    b.position.set(x,y,z); b.rotation.z=rz; b.rotation.y=Math.sin(t*.7+u.i)*.08*(1-sh); b.scale.setScalar(Math.max(.001,sc));
+    b.visible=t>=u.tDrop && op>.01 && sc>.01; u.mat.opacity=op; u.lab.material.opacity=op;
+  }
+  // ---- bells (notifications) pop around head 4.5-10.5
+  bells.forEach((s,i)=>{const a=4.6+i*.9; const v=win(t,a,a+3.2,.25); s.visible=v>.01; s.material.opacity=v;
+    const ang=i*1.3+.4; s.position.set(Math.cos(ang)*1.35,1.6+Math.sin(ang)*.9+Math.sin(t*6+i)*.05,.7); s.material.rotation=Math.sin(t*14+i)*.25; s.scale.setScalar(.42*outBack(ramp(a,a+.35,t)));});
+  // ---- scribble
+  const sv=win(t,6.9,31,.5); scribble.visible=sv>.01; scribble.material.opacity=sv; scribble.rotation.set(t*1.7,t*2.3,t*.9); scribble.scale.setScalar(.6+sv*.5 - ss(26,31,t)*.4);
+  scribble.position.y=2.75-ss(5,9,t)*0 + .1*Math.sin(t*3);
+
+  // ---- breathing ring
+  const rv=win(t,24.4,34.9,.5); ring.visible=ring2.visible=rv>.01;
+  const rs=1+ (ss(25.7,27.5,t)-ss(29,31.6,t))*.32 + Math.sin(t*1.2)*.01;
+  ring.scale.setScalar(rs); ring.material.opacity=rv*.9; ring2.scale.setScalar(1.12+rs*.08); ring2.material.opacity=rv*.35;
+
+  // ---- notepad
+  const pv=outBack(ramp(38.3,39.0,t))*(1-ss(44.1,44.8,t)); pad.visible=pv>.01; pad.scale.setScalar(Math.max(.001,pv));
+  pad.position.set(.82,1.0+Math.sin(t*1.5)*.03,1.0); pad.rotation.set(-.12,-.25,.06);
+  const nItems=Math.floor(clamp((t-39.6)/1.75)*7+.0001); drawPad(t<39.6?0:Math.min(7,nItems+1));
+  // ---- sparks: on breath-out ending, on writing, on check, on bloom
+  sparks.forEach((s,i)=>{
+    const groups=[[39.6,.82,1.4],[50.6,.8,2.05],[73.4,0,2.6]]; let vis=false;
+    for(const [a,x0,y0] of groups){const k=ramp(a,a+1.1,t); if(k>0&&k<1){vis=true;const ang=i/8*Math.PI*2;const r=.2+k*.9;
+      s.position.set(x0+Math.cos(ang)*r,y0+Math.sin(ang)*r,1.3); s.material.opacity=1-k; s.scale.setScalar(.35*(1-k*.4));}}
+    s.visible=vis;});
+  // ---- checkmark
+  const cv=outBack(ramp(50.6,51.1,t))*(1-ss(53,53.6,t)); check.visible=cv>.01; check.scale.setScalar(Math.max(.001,cv));
+  check.position.set(.8,2.05+Math.sin(t*3)*.04,1.25);
+
+  // ---- Pip the friend
+  const pin=ss(55.2,56.4,t)*(1-ss(66.8,67.8,t));
+  pip.g.visible=pin>.01;
+  const pipHop=Math.max(0,Math.sin((t-55.2)*Math.PI/0.6))*.25*(t<56.4?1:0) + Math.max(0,Math.sin(clamp((t-57.1)/.5)*Math.PI))*.2;
+  pip.g.position.set(lerp(2.6,.95,pin),0,.35);
+  pip.g.rotation.y=-.45;
+  poseBlob(pip,{t,amp:0,mood:1,blinkSeed:1.3,wave:win(t,56.6,58.2,.3),hop:pipHop});
+  // hearts float between them
+  hearts.forEach((h,i)=>{const a=56.8+i*.45; const k=ramp(a,a+2.4,t); const v=Math.sin(k*Math.PI)*(t<66.8?1:0);
+    h.visible=v>.01&&k<1; h.material.opacity=v; h.position.set(.25+Math.sin(i*2.1+k*4)*.25,1.4+k*1.6,.8); h.scale.setScalar(.25+.2*v);});
+  // ---- petals confetti at end
+  petals.forEach((p,i)=>{const a=73.5+(i%6)*.12; const k=ramp(a,a+5,t); p.visible=k>0&&k<1;
+    const sx=((i*37)%19)/19-.5; p.position.set(sx*3.2+Math.sin(t*2+i)*.15,4.2-k*5.2,((i*13)%7)/7-.2); p.material.rotation=t*2+i; p.material.opacity=1-ss(.8,1,k);});
+
+  // ---- camera
+  const camZ=8.4 + ss(3,7,t)*1.3 - ss(22,25,t)*.8 + ss(35.4,37,t)*.4 - ss(44.4,46,t)*.4 - ss(44.4,46,t)*.0 + ss(53.4,55,t)*.3 - ss(73,75,t)*.4;
+  const camY=1.75 + ss(3,7,t)*.45 - ss(22,25,t)*.3 - ss(44.4,46,t)*.15 + ss(52.5,54,t)*.15;
+  const camX=Math.sin(t*.35)*.18 + ss(53.4,55.5,t)*.25 - ss(66.8,68,t)*.25;
+  camera.position.set(camX,camY,camZ);
+  camera.lookAt(camX*.4, lerp(1.55,1.95,ss(3,7,t)-ss(22,25,t)*.7) - ss(44.4,46,t)*.1, 0);
+
+  // ---- overlays
+  // chip (section label)
+  const chips=[[2.0,10.2,'😮‍💨  FEELING OVERWHELMED?'],[23.3,35.2,'STEP 1 · BREATHE'],[35.4,44.2,'STEP 2 · WRITE IT DOWN'],[44.36,53.2,'STEP 3 · ONE TINY STEP'],[53.36,59.4,'STEP 4 · REACH OUT']];
+  let chip=''; let co=0; for(const [a,b,txt] of chips){const v=win(t,a,b,.3); if(v>0){chip=txt;co=v;}}
+  setHTML(chipEl,'chip',chip?`<span>${chip}</span>`:''); opacity(chipEl,co,(1-co)*-30);
+  // title moments
+  const titles=[[0,2.2,'Hi, I’m Bloom!<small>let’s talk about feelings 🌱</small>'],[10.8,14.6,'That’s called<br>overwhelm.<small>…and it happens to everyone.</small>'],[20.7,23.2,'Let’s make it<br>lighter. ✨'],[73.4,80.5,'You’ve got this.<small>Feel better, one small step at a time.</small>']];
+  let tt='',to=0; for(const [a,b,h] of titles){const v=win(t,a,b,.3); if(v>0){tt=h;to=v;}}
+  setHTML(titleEl,'title',tt); opacity(titleEl,to,(1-to)*24, .94+.06*to);
+  // big breathing counter
+  let big='',bo=0;
+  const bb=[[25.6,27.5,'IN','1 · 2 · 3 · 4',25.7,27.5],[27.5,29.0,'HOLD','1 · 2 · 3 · 4',27.5,29],[29.0,31.7,'OUT','1 · 2 · 3 · 4 · 5 · 6',29,31.6]];
+  for(const [a,b,w,cnt,c0,c1] of bb){ if(t>=a&&t<b){ const n=cnt.split(' · '); const k=Math.min(n.length,Math.floor(ramp(c0,c1,t)*n.length)+1);
+    big=`${w}<small>${n.slice(0,k).join(' · ')}</small>`; bo=win(t,a-.1,b+.1,.12);} }
+  setHTML(bigEl,'big',big); opacity(bigEl,bo,0,.9+.1*bo+ (big.startsWith('IN')?ramp(25.7,27.5,t)*.15:big.startsWith('OUT')?(1-ramp(29,31.6,t))*.15:.15));
+  // cards
+  let card='',ko=0;
+  if(t>=14.6&&t<20.6){ const fill=Math.round(lerp(60,128,ss(15,19.5,t))); card=`<div class="box"><h2>Not weakness.<br>Overload. 🧠</h2><p>Your mind’s load right now:</p><div class="meter"><i style="width:${Math.min(100,fill)}%"></i></div><p style="text-align:right;color:#ff5e62;font-weight:900">${fill}%</p></div>`; ko=win(t,14.6,20.6,.3);}
+  if(t>=59.4&&t<67.3){ const s2=t>=64.3; card=`<div class="box"><h2>If the heavy feeling won’t lift…</h2><p>🩺 Talk to a doctor or a counselor.</p>${s2?'<p>💪 Asking for help is <b>strength</b>, not weakness.</p>':''}<p class="fine">In crisis in the US? Call or text 988. Elsewhere, contact your local emergency line.</p></div>`; ko=win(t,59.4,67.3,.35);}
+  if(t>=67.3&&t<73.3){ const items=[['🌬️','Breathe',68.54],['📝','Write it down',69.4],['👣','Take one tiny step',70.48],['🤝','Reach out',72.38]];
+    card=`<div class="box"><h2>Remember 💛</h2>${items.map(([e,l,a])=>`<div class="row ${t>=a?'on':''}"><div class="ck">${t>=a?'✓':''}</div>${e} ${l}</div>`).join('')}</div>`; ko=win(t,67.3,73.3,.3);}
+  if(t>=56.6&&t<59.4){ card=`<div class="box" style="width:auto;padding:30px 44px"><p style="font-size:46px;font-weight:800;margin:0">💬 “Hey, can we talk?”</p></div>`; ko=win(t,56.6,59.4,.3);}
+  setHTML(cardEl,'card',card); opacity(cardEl,ko,(1-ko)*30);
+  // brand fades during end card
+  caption(t);
+}
+
+window.renderFrame=(t)=>{update(t);renderer.render(scene,camera);return true;};
+window.T_END=T_END;
+document.fonts.ready.then(()=>{window.READY=true;});
+</script>
+</body>
+</html>
