@@ -1,0 +1,175 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:#000}canvas{display:block}</style></head>
+<body><canvas id="c" width="720" height="1280"></canvas>
+<script>
+// Puppet-style 2D dialogue animation renderer.
+// window.renderFrame(t) draws the frame at time t (seconds).
+const c = document.getElementById('c'), g = c.getContext('2d');
+const W = 720, H = 1280;
+
+// ---- Script: who speaks, when, and the caption ----
+const TITLE = "Aliens finally make contact\nand it's the DMV 👽";
+const LINES = [
+  { who: 'clerk', t0: 0.3, t1: 2.2, text: "next" },
+  { who: 'guy',   t0: 2.6, t1: 5.2, text: "hi, I just got abducted" },
+  { who: 'clerk', t0: 5.6, t1: 8.4, text: "did you fill out form 7B" },
+  { who: 'guy',   t0: 8.8, t1: 10.6, text: "I was asleep" },
+  { who: 'clerk', t0: 11.0, t1: 13.6, text: "take a number" },
+  { who: 'wide',  t0: 14.0, t1: 16.0, text: "" },
+];
+const DURATION = 16;
+
+// ---- helpers ----
+const ease = x => x < .5 ? 2*x*x : 1 - Math.pow(-2*x+2, 2)/2;
+function hash(n){ const s = Math.sin(n*127.1)*43758.5453; return s - Math.floor(s); }
+function line(x1,y1,x2,y2,w=10,col='#111'){ g.strokeStyle=col; g.lineWidth=w; g.lineCap='round'; g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke(); }
+function circle(x,y,r,fill,stroke='#111',lw=5){ g.beginPath(); g.arc(x,y,r,0,Math.PI*2); if(fill){g.fillStyle=fill; g.fill();} if(stroke){g.strokeStyle=stroke; g.lineWidth=lw; g.stroke();} }
+function rrect(x,y,w,h,r,fill,stroke='#111',lw=5){ g.beginPath(); g.roundRect(x,y,w,h,r); if(fill){g.fillStyle=fill; g.fill();} if(stroke){g.strokeStyle=stroke; g.lineWidth=lw; g.stroke();} }
+
+// mouth openness 0..1 while speaking (pseudo-syllables at ~8/s)
+function mouthOpen(who, t){
+  for (const L of LINES) if (L.who === who && t >= L.t0 && t <= L.t1){
+    const k = Math.floor((t - L.t0) * 9);
+    return k % 3 === 2 ? 0.15 : 0.35 + hash(k + L.t0*10) * 0.65;
+  }
+  return 0;
+}
+function speaking(who,t){ return LINES.some(L => L.who===who && t>=L.t0 && t<=L.t1); }
+function blink(t, seed){ const p = (t + seed) % 3.7; return p < 0.12; }
+
+// ---- Background: grayscale alien office ----
+function background(side, t){
+  const sky = g.createLinearGradient(0,0,0,H);
+  sky.addColorStop(0,'#cfcfcf'); sky.addColorStop(1,'#f4f4f4');
+  g.fillStyle = sky; g.fillRect(0,0,W,H);
+  // round porthole windows with stars
+  for (let i=0;i<3;i++){
+    const x = 120 + i*240 + (side==='guy'? -60:0), y = 330;
+    circle(x,y,80,'#2b2b2b','#777',14);
+    for (let s=0;s<6;s++){ const a=hash(i*10+s)*6.28, r=hash(s+i)*60; circle(x+Math.cos(a)*r, y+Math.sin(a)*r, 2+(Math.sin(t*3+s)>0.7?2:0), '#eee', null); }
+  }
+  // "TAKE A NUMBER" screen
+  rrect(side==='clerk'? 470:60, 470, 190, 90, 10, '#333', '#666', 8);
+  g.fillStyle = '#ddd'; g.font = 'bold 44px monospace'; g.textAlign='center';
+  g.fillText('Nº ' + (t > 12.5 ? '8,402' : '8,401'), (side==='clerk'?565:155), 530);
+  // floor
+  g.fillStyle = '#bdbdbd'; g.fillRect(0, 1060, W, 220);
+}
+
+// ---- Characters ----
+function clerk(x, y, t, s=1){
+  g.save(); g.translate(x,y); g.scale(s,s);
+  const bob = Math.sin(t*2)*3;
+  // body (sits behind desk)
+  rrect(-55, 40+bob, 110, 220, 40, '#3a3a3a');
+  // head: wide oval, three eyes, antennae
+  const hy = -40 + bob;
+  line(-30,hy-80,-50,hy-140,6); circle(-50,hy-145,12,'#ddd');
+  line(30,hy-80,50,hy-140,6);  circle(50,hy-145,12,'#ddd');
+  g.beginPath(); g.ellipse(0,hy,95,85,0,0,Math.PI*2); g.fillStyle='#d6d6d6'; g.fill(); g.strokeStyle='#111'; g.lineWidth=6; g.stroke();
+  const b = blink(t, 0.4);
+  for (const ex of [-45,0,45]){
+    if (b) line(ex-16,hy-15,ex+16,hy-15,6);
+    else { circle(ex,hy-15,20,'#fff'); circle(ex+3,hy-12,7,'#111',null); }
+  }
+  // bored eyelids (half closed) — the joke is she's over it
+  if (!b) { g.fillStyle='#bfbfbf'; for (const ex of [-45,0,45]){ g.beginPath(); g.arc(ex,hy-15,21,Math.PI,0); g.fill(); line(ex-21,hy-15,ex+21,hy-15,5);} }
+  // mouth
+  const m = mouthOpen('clerk', t);
+  if (m>0){ g.beginPath(); g.ellipse(0,hy+40,24,6+m*20,0,0,Math.PI*2); g.fillStyle='#222'; g.fill(); }
+  else line(-22,hy+40,22,hy+40,6);
+  g.restore();
+}
+
+function guy(x, y, t, s=1){
+  g.save(); g.translate(x,y); g.scale(s,s);
+  const talking = speaking('guy', t);
+  const bob = Math.sin(t*2.3)*3;
+  // stick legs
+  line(-18,250,-22,560,10); line(18,250,22,560,10);
+  g.beginPath(); g.ellipse(-35,565,30,14,0,0,Math.PI*2); g.fillStyle='#fff'; g.fill(); g.strokeStyle='#111'; g.lineWidth=6; g.stroke();
+  g.beginPath(); g.ellipse(35,565,30,14,0,0,Math.PI*2); g.fill(); g.stroke();
+  // pajamas torso
+  rrect(-50, 30+bob, 100, 230, 30, '#efefef');
+  for (let i=0;i<4;i++) circle(0, 70+i*45+bob, 5, '#111', null);
+  // arms: gesture while talking
+  const gest = talking ? ease((Math.sin(t*4)+1)/2) : 0;
+  line(-48,60+bob,-75,200+bob,9);
+  line(48,60+bob, 70+gest*50, 190 - gest*70 + bob, 9);
+  // head
+  const hy = -50 + bob;
+  circle(0,hy,80,'#e6e6e6','#111',6);
+  // messy bed hair
+  for (let i=0;i<7;i++) line(-50+i*16, hy-70, -56+i*16 + (i%2?10:-10), hy-100, 6);
+  // googly eyes, wide and panicked
+  const b = blink(t, 1.9);
+  for (const ex of [-28,28]){
+    if (b) line(ex-20,hy-10,ex+20,hy-10,6);
+    else { circle(ex,hy-10,26,'#fff'); const look = Math.sin(t*1.3)*4; circle(ex+look,hy-6,8,'#111',null); }
+  }
+  // worried eyebrows
+  line(-48,hy-48,-12,hy-40,6); line(48,hy-48,12,hy-40,6);
+  const m = mouthOpen('guy', t);
+  if (m>0){ g.beginPath(); g.ellipse(0,hy+42,20,5+m*22,0,0,Math.PI*2); g.fillStyle='#222'; g.fill(); }
+  else { g.beginPath(); g.arc(0,hy+52,18,Math.PI*1.15,Math.PI*1.85); g.strokeStyle='#111'; g.lineWidth=6; g.stroke(); }
+  g.restore();
+}
+
+function desk(x){
+  rrect(x, 830, 760, 300, 18, '#e2e2e2');
+  rrect(x+20, 800, 720, 50, 14, '#f2f2f2');
+  rrect(x+250, 860, 260, 70, 8, '#fafafa', '#111', 4);
+  g.fillStyle='#222'; g.font='bold 30px sans-serif'; g.textAlign='center';
+  g.fillText('EARTHLING INTAKE', x+380, 905);
+}
+
+// ---- Overlays ----
+function titleBanner(){
+  g.font = 'bold 36px sans-serif'; g.textAlign='center';
+  const lines = TITLE.split('\n');
+  const w = Math.max(...lines.map(l=>g.measureText(l).width)) + 40;
+  rrect((W-w)/2, 60, w, 110, 10, '#000', null);
+  g.fillStyle='#fff'; lines.forEach((l,i)=>g.fillText(l, W/2, 105+i*44));
+}
+function caption(t){
+  const L = LINES.find(L => t>=L.t0 && t<=L.t1+0.2 && L.text);
+  if (!L) return;
+  // word-by-word reveal
+  const words = L.text.split(' ');
+  const n = Math.min(words.length, 1 + Math.floor((t-L.t0)/((L.t1-L.t0)/words.length)));
+  const txt = words.slice(0,n).join(' ');
+  g.font='bold 34px sans-serif'; g.textAlign='center';
+  const w = g.measureText(txt).width + 24;
+  rrect((W-w)/2, 960, w, 50, 8, 'rgba(0,0,0,.75)', null);
+  g.fillStyle='#fff'; g.fillText(txt, W/2, 996);
+}
+
+// ---- Camera: shot / reverse-shot cutting driven by the script ----
+function shotAt(t){
+  let shot = 'clerk';
+  for (const L of LINES) if (t >= L.t0 - 0.25) shot = L.who;
+  return shot;
+}
+
+window.renderFrame = function(t){
+  const shot = shotAt(t);
+  // subtle push-in on each shot for life
+  const shotStart = Math.max(...LINES.filter(L=>t>=L.t0-0.25).map(L=>L.t0-0.25), 0);
+  const z = 1 + Math.min((t-shotStart)*0.012, 0.04);
+  g.save(); g.translate(W/2,H/2); g.scale(z,z); g.translate(-W/2,-H/2);
+  if (shot === 'clerk'){ background('clerk',t); clerk(W/2, 560, t); desk(-20); }
+  else if (shot === 'guy'){ background('guy',t); desk(-560); guy(W/2+30, 520, t); }
+  else { // wide
+    background('clerk',t); clerk(200, 700, t, 0.6); desk(-300);
+    guy(520, 640, t, 0.6);
+    // the guy slumps away holding ticket
+    const k = ease(Math.min((t-14)/2,1));
+    rrect(560 + k*20, 700, 40, 26, 4, '#fff');
+  }
+  g.restore();
+  titleBanner(); caption(t);
+};
+window.DURATION = DURATION;
+renderFrame(0);
+</script></body></html>
