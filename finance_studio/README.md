@@ -4,7 +4,7 @@ Automated production of original 2D animated finance documentaries for YouTube:
 Python orchestrates **Blender** (characters + environments), **Manim** (financial
 charts) and **FFmpeg** (mix, assembly, export).
 
-> Working channel name: *Ledger & Lantern* (placeholder, change in `config.yaml`).
+> Channel: **Cents Unseen** (@centsunseen), "The hidden side of money, animated."
 
 ## Quick start
 

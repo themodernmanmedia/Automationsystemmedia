@@ -3,8 +3,9 @@
 # e.g. FINSTUDIO__VIDEO__FPS=24
 
 channel:
-  name: "Ledger & Lantern"          # working title - original brand, change freely
-  tagline: "How money really works, explained in motion."
+  name: "Cents Unseen"              # handle @centsunseen (verified free 2026-11-24)
+  handle: "@centsunseen"
+  tagline: "The hidden side of money, animated."
   language: "en-US"
   audience: "US adults 18-44"
   disclaimer: >-

@@ -9,7 +9,7 @@ from animation.director import SceneSpec
 
 EPISODE = {
     "slug": "why-your-raise-feels-like-a-pay-cut",
-    "title": "Why Your Raise Feels Like a Pay Cut (Even When It Isn't)",
+    "title": "Why You Feel Poorer Even After a Raise",
     "chapters": {"hook": "A record year... so why broke?", "mystery": "The paycheck paradox",
                  "characters": "Maya and Dev", "reveal1": "Money illusion",
                  "stakes": "Locked in vs. exposed", "deeper": "Why prices never come back down",
@@ -120,7 +120,7 @@ SCENES = [
         "props": [tag("t_rent", "RENT DUE", "#E0524A", 3.4, 2.4, S(T, 0) + 1.0, d, d)],
         "sfx": [pop(S(T, 0) + 1.0)]}),
     SceneSpec("s03_title", "hook", [], "manim",
-              lambda T, d: manim("TitleCard", [0.1], kicker="LEDGER & LANTERN",
+              lambda T, d: manim("TitleCard", [0.1], kicker="CENTS UNSEEN",
                                  lines=["Why Your Raise", "Feels Like a Pay Cut"]), min_dur=3.2),
 
     # ===================================================================== MYSTERY 0:20-1:00
@@ -484,10 +484,13 @@ SCENES = [
 ]
 
 EPISODE.update({
-    "hook": "In 2025 the typical American household earned a record $87,460, even after inflation. So why do so "
-            "many people with fresh raises feel like they're falling behind? We follow Maya and her brother Dev "
-            "through the data on real wages, money illusion and locked-in costs.",
+    "hook": "Why do you feel poorer even after a raise? In 2025 the typical American household earned a record "
+            "$87,460, even after inflation. Yet by September 2026, real hourly pay was falling again. We follow Maya "
+            "and her brother Dev to find out why.\n\nYou'll learn what money illusion is, why falling inflation "
+            "doesn't mean falling prices, how a locked-in mortgage rate changes everything, and five ways to make "
+            "your next raise real.",
     "title_options": [
+        "Why You Feel Poorer Even After a Raise",
         "Why Your Raise Feels Like a Pay Cut (Even When It Isn't)",
         "Record Income, Shrinking Paychecks: The Raise Paradox Explained",
         "Why a 5% Raise Isn't Really 5%",
@@ -499,6 +502,8 @@ EPISODE.update({
         "Why Americans Earn More but Feel Broke",
         "How to Tell If Your Raise Is Actually a Raise",
     ],
-    "tags": ["raise", "inflation", "real wages", "money illusion", "personal finance", "cost of living",
-             "mortgage rates", "credit card debt", "economics explained", "animated documentary"],
+    "tags": ["why do i feel poor", "why you feel poor", "raise vs inflation", "real wages explained", "money illusion",
+             "inflation explained", "why is everything so expensive", "cost of living", "nominal vs real wages",
+             "inflaton"],
+    "hashtags": ["#personalfinance", "#inflation", "#money"],
 })

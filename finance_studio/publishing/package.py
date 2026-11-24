@@ -23,8 +23,9 @@ def build_package(out_dir: Path, meta: dict, sources_md: Path, thumbnails: list[
         "Maya and Dev are fictional characters; their raise, loan and card balance are illustrative examples.",
         "On-screen data is from the sources above. Charts labelled 'concept' or 'illustrative' are not real data.", "",
         "Educational content only. Not financial, investment, tax or legal advice. The creators are not licensed "
-        "financial professionals.",
-    ])
+        "financial professionals.", "",
+        " ".join(meta.get("hashtags", [])),
+    ]).rstrip()
     pkg = {
         "title": meta["title"],
         "title_options": meta["title_options"],
