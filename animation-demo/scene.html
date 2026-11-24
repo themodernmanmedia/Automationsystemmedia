@@ -10,15 +10,11 @@ const W = 720, H = 1280;
 
 // ---- Script: who speaks, when, and the caption ----
 const TITLE = "Aliens finally make contact\nand it's the DMV 👽";
-const LINES = [
-  { who: 'clerk', t0: 0.3, t1: 2.2, text: "next" },
-  { who: 'guy',   t0: 2.6, t1: 5.2, text: "hi, I just got abducted" },
-  { who: 'clerk', t0: 5.6, t1: 8.4, text: "did you fill out form 7B" },
-  { who: 'guy',   t0: 8.8, t1: 10.6, text: "I was asleep" },
-  { who: 'clerk', t0: 11.0, t1: 13.6, text: "take a number" },
-  { who: 'wide',  t0: 14.0, t1: 16.0, text: "" },
-];
-const DURATION = 16;
+// Timeline (line timings + per-frame loudness) comes from build_audio.py
+const TL = window.TIMELINE || { lines: [], duration: 1, ding: 99 };
+const LINES = TL.lines;
+const DURATION = TL.duration;
+const FPS = 25;
 
 // ---- helpers ----
 const ease = x => x < .5 ? 2*x*x : 1 - Math.pow(-2*x+2, 2)/2;
@@ -29,9 +25,9 @@ function rrect(x,y,w,h,r,fill,stroke='#111',lw=5){ g.beginPath(); g.roundRect(x,
 
 // mouth openness 0..1 while speaking (pseudo-syllables at ~8/s)
 function mouthOpen(who, t){
-  for (const L of LINES) if (L.who === who && t >= L.t0 && t <= L.t1){
-    const k = Math.floor((t - L.t0) * 9);
-    return k % 3 === 2 ? 0.15 : 0.35 + hash(k + L.t0*10) * 0.65;
+  for (const L of LINES) if (L.who === who && t >= L.t0 && t <= L.t1 && L.env.length){
+    const v = L.env[Math.min(L.env.length-1, Math.floor((t - L.t0) * FPS))];
+    return v < 0.12 ? 0 : Math.min(1, v * 1.3);
   }
   return 0;
 }
@@ -52,7 +48,7 @@ function background(side, t){
   // "TAKE A NUMBER" screen
   rrect(side==='clerk'? 470:60, 470, 190, 90, 10, '#333', '#666', 8);
   g.fillStyle = '#ddd'; g.font = 'bold 44px monospace'; g.textAlign='center';
-  g.fillText('Nº ' + (t > 12.5 ? '8,402' : '8,401'), (side==='clerk'?565:155), 530);
+  g.fillText('Nº ' + (t > TL.ding ? '8,402' : '8,401'), (side==='clerk'?565:155), 530);
   // floor
   g.fillStyle = '#bdbdbd'; g.fillRect(0, 1060, W, 220);
 }
@@ -161,15 +157,15 @@ window.renderFrame = function(t){
   if (shot === 'clerk'){ background('clerk',t); clerk(W/2, 560, t); desk(-20); }
   else if (shot === 'guy'){ background('guy',t); desk(-560); guy(W/2+30, 520, t); }
   else { // wide
-    background('clerk',t); clerk(200, 700, t, 0.6); desk(-300);
+    background('clerk',t); clerk(220, 700, t, 0.6); desk(-180);
     guy(520, 640, t, 0.6);
     // the guy slumps away holding ticket
-    const k = ease(Math.min((t-14)/2,1));
+    const k = ease(Math.min((t-TL.ding)/2,1));
     rrect(560 + k*20, 700, 40, 26, 4, '#fff');
   }
   g.restore();
   titleBanner(); caption(t);
 };
 window.DURATION = DURATION;
-renderFrame(0);
+
 </script></body></html>
