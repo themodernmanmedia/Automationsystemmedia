@@ -17,3 +17,5 @@ storage/
 renders/
 next-env.d.ts
 packages/db/.env
+episodes/*/preview.mp4
+episodes/*/trimmed/
