@@ -2,8 +2,8 @@
 
 **Format:** first-person survivor testimony documentary (the format behind Afrimax's 882K and
 502K hits).
-**Runtime target:** about 20 minutes. The spoken copy is about 2,900 words at a slow, emotional
-pace of roughly 140 wpm, plus pauses and B-roll breathing room.
+**Runtime target:** about 18–20 minutes. The spoken copy is about 1,900 words (about 14 minutes at a slow, emotional
+pace of roughly 140 wpm). Pauses, silences and B-roll breathing room fill the rest.
 **Language:** English, with local-language lines (Luganda) subtitled.
 
 > ### ⚠️ Read first: how to use this script honestly
